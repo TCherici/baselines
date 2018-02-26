@@ -328,7 +328,8 @@ class DDPG(object):
         actor_grads = outputs[0]
         actor_loss = outputs[1]
         critic_grads = outputs[2]
-        critic_loss = outputs[3] 
+        critic_loss = outputs[3]
+        
         # Perform a synced update.
         self.actor_optimizer.update(actor_grads, stepsize=self.actor_lr)
         self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
