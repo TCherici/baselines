@@ -8,28 +8,29 @@ class Model(object):
 
     @property
     def vars(self):
-        return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
+        repr_vars_ = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name+'_repr')
+        own_vars_ = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=self.name)
+        return repr_vars_+own_vars_
 
     @property
     def trainable_vars(self):
-        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
+        repr_vars_ = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name+'_repr')
+        own_vars_ = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
+        return repr_vars_+own_vars_
 
     @property
     def perturbable_vars(self):
         return [var for var in self.trainable_vars if 'LayerNorm' not in var.name]
 
-
-class Actor(Model):
-    def __init__(self, nb_actions, name='actor', layer_norm=True):
-        super(Actor, self).__init__(name=name)
-        self.nb_actions = nb_actions
+class Representation(Model):
+    def __init__(self, name=None, layer_norm=True):
+        super(Representation, self).__init__(name=name)
         self.layer_norm = layer_norm
-
+        
     def __call__(self, obs, reuse=False):
         with tf.variable_scope(self.name) as scope:
             if reuse:
                 scope.reuse_variables()
-
             x = obs
             x = tf.layers.dense(x, 64)
             if self.layer_norm:
@@ -41,6 +42,25 @@ class Actor(Model):
                 x = tc.layers.layer_norm(x, center=True, scale=True)
             x = tf.nn.relu(x)
             
+        return x
+        
+class Actor(Model):
+    def __init__(self, nb_actions, name='actor', layer_norm=True):
+        super(Actor, self).__init__(name=name)
+        self.nb_actions = nb_actions
+        self.layer_norm = layer_norm
+        repr_name = name + '_repr'
+        self.repr = Representation(name=repr_name, layer_norm=self.layer_norm)
+
+    def __call__(self, obs, reuse=False):
+        print("name:{} -- reprname:{}".format(self.name, self.repr.name))
+        representation = self.repr(obs, reuse=reuse)
+        
+        with tf.variable_scope(self.name) as scope:
+            if reuse:
+                scope.reuse_variables()
+            
+            x = representation
             x = tf.layers.dense(x, self.nb_actions, kernel_initializer=tf.random_uniform_initializer(minval=-3e-3, maxval=3e-3))
             x = tf.nn.tanh(x)
         return x
@@ -50,18 +70,17 @@ class Critic(Model):
     def __init__(self, name='critic', layer_norm=True):
         super(Critic, self).__init__(name=name)
         self.layer_norm = layer_norm
+        repr_name = name + '_repr'
+        self.repr = Representation(name=repr_name, layer_norm=self.layer_norm)
 
     def __call__(self, obs, action, reuse=False):
+        representation = self.repr(obs, reuse=reuse)
+        
         with tf.variable_scope(self.name) as scope:
             if reuse:
                 scope.reuse_variables()
 
-            x = obs
-            x = tf.layers.dense(x, 64)
-            if self.layer_norm:
-                x = tc.layers.layer_norm(x, center=True, scale=True)
-            x = tf.nn.relu(x)
-
+            x = representation
             x = tf.concat([x, action], axis=-1)
             x = tf.layers.dense(x, 64)
             if self.layer_norm:
