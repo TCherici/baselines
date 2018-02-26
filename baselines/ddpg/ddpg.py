@@ -314,13 +314,22 @@ class DDPG(object):
                 self.terminals1: batch['terminals1'].astype('float32'),
             })
 
-        # Get all gradients and perform a synced update.
+        # Set operations to perform
         ops = [self.actor_grads, self.actor_loss, self.critic_grads, self.critic_loss]
-        actor_grads, actor_loss, critic_grads, critic_loss = self.sess.run(ops, feed_dict={
+        # @TODO add aux grads and losses to ops list
+        
+        feed_dict = {
             self.obs0: batch['obs0'],
             self.actions: batch['actions'],
             self.critic_target: target_Q,
-        })
+        }
+        # Get gradients
+        outputs = self.sess.run(ops, feed_dict=feed_dict)
+        actor_grads = outputs[0]
+        actor_loss = outputs[1]
+        critic_grads = outputs[2]
+        critic_loss = outputs[3] 
+        # Perform a synced update.
         self.actor_optimizer.update(actor_grads, stepsize=self.actor_lr)
         self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
 
