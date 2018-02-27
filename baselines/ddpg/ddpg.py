@@ -65,7 +65,7 @@ class DDPG(object):
         gamma=0.99, tau=0.001, normalize_returns=False, enable_popart=False, normalize_observations=True,
         batch_size=128, observation_range=(-5., 5.), action_range=(-1., 1.), return_range=(-np.inf, np.inf),
         adaptive_param_noise=True, adaptive_param_noise_policy_threshold=.1,
-        critic_l2_reg=0., actor_lr=1e-4, critic_lr=1e-3, clip_norm=None, reward_scale=1.):
+        critic_l2_reg=0., actor_lr=1e-4, critic_lr=1e-3, clip_norm=None, reward_scale=1., aux_tasks=[]):
         # Inputs.
         self.obs0 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs0')
         self.obs1 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs1')
@@ -96,6 +96,8 @@ class DDPG(object):
         self.batch_size = batch_size
         self.stats_sample = None
         self.critic_l2_reg = critic_l2_reg
+        
+        self.aux_tasks = aux_tasks
 
         # Observation normalization.
         if self.normalize_observations:
