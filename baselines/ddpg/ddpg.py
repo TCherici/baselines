@@ -9,6 +9,7 @@ from baselines import logger
 from baselines.common.mpi_adam import MpiAdam
 import baselines.common.tf_util as U
 from baselines.common.mpi_running_mean_std import RunningMeanStd
+from baselines.ddpg.models import Representation
 from mpi4py import MPI
 
 def normalize(x, stats):
@@ -146,6 +147,32 @@ class DDPG(object):
             self.setup_popart()
         self.setup_stats()
         self.setup_target_network_updates()
+        
+        if self.aux_tasks is not None:
+            self.setup_aux_optimizer()
+    
+    def setup_aux_optimizer(self):
+        logger.info('setting up aux optimizer for actor...')
+        self.aux_ops = []
+        self.aux_losses = tf.Variable(tf.zeros([], dtype=np.float32), name="loss")
+        self.actor_aux_vars = set([])
+        for auxtask in self.aux_tasks:
+            logger.info('auxtask: '+auxtask)
+            if auxtask is 'tc':
+                #@TODO layernorm for aux?
+                tc_repr = Representation(name=self.actor.repr.name, layer_norm=self.actor.layer_norm)
+                #@TODO use normalized obs?
+                repr0 = tc_repr(self.obs0, reuse=True)
+                repr1 = tc_repr(self.obs1, reuse=True)
+                self.tc_loss = tf.nn.l2_loss(repr1-repr0)
+                self.aux_losses += self.tc_loss
+                self.actor_aux_vars.update(set(tc_repr.trainable_vars))
+        
+            self.actor_aux_vars = list(self.actor_aux_vars)
+            self.actor_aux_grads = U.flatgrad(self.aux_losses, self.actor_aux_vars, clip_norm=self.clip_norm)
+            self.actor_aux_optimizer = MpiAdam(var_list=self.actor_aux_vars,
+                               beta1=0.9, beta2=0.999, epsilon=1e-08)
+                
 
     def setup_target_network_updates(self):
         actor_init_updates, actor_soft_updates = get_target_updates(self.actor.vars, self.target_actor.vars, self.tau)
@@ -316,26 +343,32 @@ class DDPG(object):
                 self.terminals1: batch['terminals1'].astype('float32'),
             })
 
-        # Set operations to perform
+        # Get gradients DDPG
         ops = [self.actor_grads, self.actor_loss, self.critic_grads, self.critic_loss]
-        # @TODO add aux grads and losses to ops list
-        
-        feed_dict = {
-            self.obs0: batch['obs0'],
-            self.actions: batch['actions'],
-            self.critic_target: target_Q,
-        }
-        # Get gradients
-        outputs = self.sess.run(ops, feed_dict=feed_dict)
-        actor_grads = outputs[0]
-        actor_loss = outputs[1]
-        critic_grads = outputs[2]
-        critic_loss = outputs[3]
+        feed_dict = { self.obs0: batch['obs0'], 
+                      self.actions: batch['actions'], 
+                      self.critic_target: target_Q}
+        actor_grads, actor_loss, critic_grads, critic_loss = self.sess.run(ops, feed_dict=feed_dict)
         
         # Perform a synced update.
         self.actor_optimizer.update(actor_grads, stepsize=self.actor_lr)
         self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
-
+        
+        # Get gradients AUX
+        if self.aux_tasks is not None:
+            aux_dict = {}
+            aux_ops = {'grads':self.actor_aux_grads}
+            for index, auxtask in enumerate(self.aux_tasks):
+                if auxtask is 'tc':
+                    aux_dict.update({
+                        self.obs0: batch['obs0'],
+                        self.obs1: batch['obs1']})
+                    aux_ops.update({'tc':self.tc_loss})
+            
+            auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
+            actorauxgrads = auxoutputs['grads']
+            self.actor_aux_optimizer.update(actorauxgrads, stepsize=self.actor_lr)
+        
         return critic_loss, actor_loss
 
     def initialize(self, sess):

@@ -17,7 +17,12 @@ class Model(object):
         repr_vars_ = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name+'_repr')
         own_vars_ = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
         return repr_vars_+own_vars_
-
+    
+    @property
+    def repr_vars(self):
+        repr_vars_ = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name+'_repr')
+        return repr_vars_
+    
     @property
     def perturbable_vars(self):
         return [var for var in self.trainable_vars if 'LayerNorm' not in var.name]
