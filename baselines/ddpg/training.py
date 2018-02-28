@@ -106,6 +106,9 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 # Train.
                 epoch_actor_losses = []
                 epoch_critic_losses = []
+                epoch_aux_losses = {}
+                for name in aux_tasks:
+                    epoch_aux_losses['aux/'+name] = []
                 epoch_adaptive_distances = []
                 for t_train in range(nb_train_steps):
                     # Adapt param noise, if necessary.
@@ -113,9 +116,15 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                         distance = agent.adapt_param_noise()
                         epoch_adaptive_distances.append(distance)
 
-                    cl, al = agent.train()
+                    cl, al, auxl = agent.train()
                     epoch_critic_losses.append(cl)
                     epoch_actor_losses.append(al)
+                    if aux_tasks is not None:
+                        for name, value in auxl.items():
+                            if name == 'grads':
+                                continue
+                            epoch_aux_losses['aux/'+name].append(value)
+
                     agent.update_target_net()
 
                 # Evaluate.
@@ -156,6 +165,11 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
             combined_stats['total/episodes'] = episodes
             combined_stats['rollout/episodes'] = epoch_episodes
             combined_stats['rollout/actions_std'] = np.std(epoch_actions)
+            # Auxiliary statistics.
+            if aux_tasks is not None:
+                for name, values in epoch_aux_losses.items():
+                    combined_stats[name] = np.mean(values)
+
             # Evaluation statistics.
             if eval_env is not None:
                 combined_stats['eval/return'] = eval_episode_rewards

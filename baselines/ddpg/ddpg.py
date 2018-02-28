@@ -369,7 +369,7 @@ class DDPG(object):
             actorauxgrads = auxoutputs['grads']
             self.actor_aux_optimizer.update(actorauxgrads, stepsize=self.actor_lr)
         
-        return critic_loss, actor_loss
+        return critic_loss, actor_loss, auxoutputs
 
     def initialize(self, sess):
         self.sess = sess
