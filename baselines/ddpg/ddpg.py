@@ -66,7 +66,7 @@ class DDPG(object):
         gamma=0.99, tau=0.001, normalize_returns=False, enable_popart=False, normalize_observations=True,
         batch_size=128, observation_range=(-5., 5.), action_range=(-1., 1.), return_range=(-np.inf, np.inf),
         adaptive_param_noise=True, adaptive_param_noise_policy_threshold=.1,
-        critic_l2_reg=0., actor_lr=1e-4, critic_lr=1e-3, clip_norm=None, reward_scale=1., aux_tasks=[]):
+        critic_l2_reg=0., actor_lr=1e-4, critic_lr=1e-3, clip_norm=None, reward_scale=1., aux_apply='actor', aux_tasks=[]):
         # Inputs.
         self.obs0 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs0')
         self.obs1 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs1')
@@ -97,7 +97,8 @@ class DDPG(object):
         self.batch_size = batch_size
         self.stats_sample = None
         self.critic_l2_reg = critic_l2_reg
-        
+
+        self.aux_apply = aux_apply
         self.aux_tasks = aux_tasks
 
         # Observation normalization.
@@ -147,7 +148,8 @@ class DDPG(object):
             self.setup_popart()
         self.setup_stats()
         self.setup_target_network_updates()
-        
+
+
         if self.aux_tasks is not None:
             self.setup_aux_optimizer()
     
@@ -155,24 +157,37 @@ class DDPG(object):
         logger.info('setting up aux optimizer for actor...')
         self.aux_ops = []
         self.aux_losses = tf.Variable(tf.zeros([], dtype=np.float32), name="loss")
-        self.actor_aux_vars = set([])
-        for auxtask in self.aux_tasks:
-            logger.info('auxtask: '+auxtask)
-            if auxtask is 'tc':
-                #@TODO layernorm for aux?
-                tc_repr = Representation(name=self.actor.repr.name, layer_norm=self.actor.layer_norm)
-                #@TODO use normalized obs?
-                repr0 = tc_repr(self.obs0, reuse=True)
-                repr1 = tc_repr(self.obs1, reuse=True)
-                self.tc_loss = tf.nn.l2_loss(repr1-repr0)
-                self.aux_losses += self.tc_loss
-                self.actor_aux_vars.update(set(tc_repr.trainable_vars))
-        
-            self.actor_aux_vars = list(self.actor_aux_vars)
-            self.actor_aux_grads = U.flatgrad(self.aux_losses, self.actor_aux_vars, clip_norm=self.clip_norm)
-            self.actor_aux_optimizer = MpiAdam(var_list=self.actor_aux_vars,
-                               beta1=0.9, beta2=0.999, epsilon=1e-08)
-                
+        self.aux_vars = set([])
+        if self.aux_apply is 'actor' or 'both':
+            for auxtask in self.aux_tasks:
+                logger.info('actor - aux task: ' + auxtask)
+                if auxtask is 'tc':
+                    #@TODO layernorm for aux?
+                    act_tc_repr = Representation(name=self.actor.repr.name, layer_norm=self.actor.layer_norm)
+                    #@TODO use normalized obs?
+                    act_repr0 = act_tc_repr(self.obs0, reuse=True)
+                    act_repr1 = act_tc_repr(self.obs1, reuse=True)
+                    self.act_tc_loss = tf.nn.l2_loss(act_repr1-act_repr0)
+                    self.aux_losses += self.act_tc_loss
+                    self.aux_vars.update(set(act_tc_repr.trainable_vars))
+
+        if self.aux_apply == 'critic' or self.aux_apply == 'both':
+            for auxtask in self.aux_tasks:
+                logger.info('critic - aux task: ' + auxtask)
+                if auxtask is 'tc':
+                    #@TODO layernorm for aux?
+                    cri_tc_repr = Representation(name=self.critic.repr.name, layer_norm=self.actor.layer_norm)
+                    #@TODO use normalized obs?
+                    cri_repr0 = cri_tc_repr(self.obs0, reuse=True)
+                    cri_repr1 = cri_tc_repr(self.obs1, reuse=True)
+                    self.cri_tc_loss = tf.nn.l2_loss(cri_repr1-cri_repr0)
+                    self.aux_losses += self.cri_tc_loss
+                    self.aux_vars.update(set(cri_tc_repr.trainable_vars))
+
+        self.aux_vars = list(self.aux_vars)
+        self.aux_grads = U.flatgrad(self.aux_losses, self.aux_vars, clip_norm=self.clip_norm)
+        self.aux_optimizer = MpiAdam(var_list=self.aux_vars,
+                           beta1=0.9, beta2=0.999, epsilon=1e-08)
 
     def setup_target_network_updates(self):
         actor_init_updates, actor_soft_updates = get_target_updates(self.actor.vars, self.target_actor.vars, self.tau)
@@ -357,13 +372,14 @@ class DDPG(object):
         # Get gradients AUX
         if self.aux_tasks is not None:
             aux_dict = {}
-            aux_ops = {'grads':self.actor_aux_grads}
+            aux_ops = {'grads':self.aux_grads}
             for index, auxtask in enumerate(self.aux_tasks):
                 if auxtask is 'tc':
                     aux_dict.update({
                         self.obs0: batch['obs0'],
                         self.obs1: batch['obs1']})
-                    aux_ops.update({'tc':self.tc_loss})
+                    if aux_apply is 'actor' or 'both'
+                    aux_ops.update({'act_tc':self.tc_loss})
             
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
             actorauxgrads = auxoutputs['grads']
