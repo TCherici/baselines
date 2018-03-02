@@ -378,12 +378,14 @@ class DDPG(object):
                     aux_dict.update({
                         self.obs0: batch['obs0'],
                         self.obs1: batch['obs1']})
-                    if aux_apply is 'actor' or 'both'
-                    aux_ops.update({'act_tc':self.tc_loss})
-            
+                    # add a tc loss for tensorboard
+                    if self.aux_apply == 'actor' or self.aux_apply == 'both':
+                        aux_ops.update({'tc':self.act_tc_loss})
+                    elif self.aux_apply == 'critic':
+                        aux_ops.update({'tc':self.cri_tc_loss})
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
-            actorauxgrads = auxoutputs['grads']
-            self.actor_aux_optimizer.update(actorauxgrads, stepsize=self.actor_lr)
+            auxgrads = auxoutputs['grads']
+            self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)
         
         return critic_loss, actor_loss, auxoutputs
 
