@@ -188,8 +188,8 @@ class DDPG(object):
                     act_prop_ds1 = tf.norm(act_repr1-act_repr0,axis=1)
                     act_prop_ds2 = tf.norm(act_repr101-act_repr100,axis=1)
                     act_prop_statediff = tf.square(act_prop_ds2-act_prop_ds1)
-                    act_prop_actiondiff = tf.square(self.actions100-self.actions)
-                    self.act_prop_loss = act_prop_statediff*act_prop_actiondiff
+                    act_prop_actiondiff = tf.reduce_mean(tf.square(self.actions100-self.actions),axis=1)
+                    self.act_prop_loss = tf.multiply(act_prop_statediff,act_prop_actiondiff)
                     self.aux_losses += self.act_prop_loss
                     self.aux_vars.update(set(act_prop_repr.trainable_vars))
                     
@@ -219,8 +219,8 @@ class DDPG(object):
                     cri_prop_ds1 = tf.norm(cri_repr1-cri_repr0,axis=1)
                     cri_prop_ds2 = tf.norm(cri_repr101-cri_repr100,axis=1)
                     cri_prop_statediff = tf.square(cri_prop_ds2-cri_prop_ds1)
-                    cri_prop_actiondiff = tf.square(self.actions100-self.actions)
-                    self.cri_prop_loss = cri_prop_statediff*cri_prop_actiondiff
+                    cri_prop_actiondiff = tf.reduce_mean(tf.square(self.actions100-self.actions),axis=1)
+                    self.cri_prop_loss = tf.multiply(cri_prop_statediff,cri_prop_actiondiff)
                     self.aux_losses += self.cri_prop_loss
                     self.aux_vars.update(set(cri_prop_repr.trainable_vars))
                 
