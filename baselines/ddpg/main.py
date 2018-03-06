@@ -105,8 +105,8 @@ def parse_args():
     parser.add_argument('--noise-type', type=str, default='adaptive-param_0.2')  # choices are adaptive-param_xx, ou_xx, normal_xx, none
     parser.add_argument('--num-timesteps', type=int, default=None)
     
-    parser.add_argument('--aux-apply', type=list, default='both')
-    parser.add_argument('--aux-tasks', type=list, default=['tc'])
+    parser.add_argument('--aux-apply', type=str, default='both')
+    parser.add_argument('--aux-tasks', nargs='*', type=str, default='tc')
     
     boolean_flag(parser, 'evaluation', default=False)
     args = parser.parse_args()

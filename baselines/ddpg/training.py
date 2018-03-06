@@ -102,7 +102,11 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
 
                         agent.reset()
                         obs = env.reset()
-
+                
+                # for the first 5 cycles just gather data
+                if epoch == 0 and cycle < 5:
+                    continue
+                
                 # Train.
                 epoch_actor_losses = []
                 epoch_critic_losses = []

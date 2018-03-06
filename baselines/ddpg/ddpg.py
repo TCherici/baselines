@@ -75,7 +75,18 @@ class DDPG(object):
         self.actions = tf.placeholder(tf.float32, shape=(None,) + action_shape, name='actions')
         self.critic_target = tf.placeholder(tf.float32, shape=(None, 1), name='critic_target')
         self.param_noise_stddev = tf.placeholder(tf.float32, shape=(), name='param_noise_stddev')
+        
+        # Aux Inputs.        
+        self.aux_apply = aux_apply
+        self.aux_tasks = aux_tasks
 
+        if 'prop' in self.aux_tasks or 'caus' in self.aux_tasks or 'rep' in self.aux_tasks:
+            self.obs100 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs100')
+            self.obs101 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs101')
+        if 'prop' in self.aux_tasks or 'caus' in self.aux_tasks or 'rep' in self.aux_tasks:
+            self.actions100 = tf.placeholder(tf.float32, shape=(None,) + action_shape, name='actions100')
+        if 'caus' in self.aux_tasks:
+            self.rewards100 = tf.placeholder(tf.float32, shape=(None, 1), name='rewards100')
         # Parameters.
         self.gamma = gamma
         self.tau = tau
@@ -97,9 +108,6 @@ class DDPG(object):
         self.batch_size = batch_size
         self.stats_sample = None
         self.critic_l2_reg = critic_l2_reg
-
-        self.aux_apply = aux_apply
-        self.aux_tasks = aux_tasks
 
         # Observation normalization.
         if self.normalize_observations:
@@ -160,21 +168,39 @@ class DDPG(object):
         self.aux_vars = set([])
         if self.aux_apply is 'actor' or 'both':
             for auxtask in self.aux_tasks:
-                logger.info('actor - aux task: ' + auxtask)
-                if auxtask is 'tc':
+                logger.info('actor - aux task: {}'.format(auxtask))
+                if auxtask == 'tc':
                     #@TODO layernorm for aux?
                     act_tc_repr = Representation(name=self.actor.repr.name, layer_norm=self.actor.layer_norm)
                     #@TODO use normalized obs?
-                    act_repr0 = act_tc_repr(self.obs0, reuse=True)
-                    act_repr1 = act_tc_repr(self.obs1, reuse=True)
-                    self.act_tc_loss = tf.nn.l2_loss(act_repr1-act_repr0)
+                    act_tc_repr0 = act_tc_repr(self.obs0, reuse=True)
+                    act_tc_repr1 = act_tc_repr(self.obs1, reuse=True)
+                    self.act_tc_loss = tf.nn.l2_loss(act_tc_repr1-act_tc_repr0)
                     self.aux_losses += self.act_tc_loss
                     self.aux_vars.update(set(act_tc_repr.trainable_vars))
+                    
+                elif auxtask == 'prop':
+                    act_prop_repr = Representation(name=self.actor.repr.name, layer_norm=self.actor.layer_norm)
+                    act_repr0 = act_prop_repr(self.obs0, reuse=True)
+                    act_repr1 = act_prop_repr(self.obs1, reuse=True)
+                    act_repr100 = act_prop_repr(self.obs100, reuse=True)
+                    act_repr101 = act_prop_repr(self.obs101, reuse=True)
+                    act_prop_ds1 = tf.norm(act_repr1-act_repr0,axis=1)
+                    act_prop_ds2 = tf.norm(act_repr101-act_repr100,axis=1)
+                    act_prop_statediff = tf.square(act_prop_ds2-act_prop_ds1)
+                    act_prop_actiondiff = tf.square(self.actions100-self.actions)
+                    self.act_prop_loss = act_prop_statediff*act_prop_actiondiff
+                    self.aux_losses += self.act_prop_loss
+                    self.aux_vars.update(set(act_prop_repr.trainable_vars))
+                    
+                else:
+                    raise ValueError('task {} not recognized'.format(auxtask))
+                
 
         if self.aux_apply == 'critic' or self.aux_apply == 'both':
             for auxtask in self.aux_tasks:
                 logger.info('critic - aux task: ' + auxtask)
-                if auxtask is 'tc':
+                if auxtask == 'tc':
                     #@TODO layernorm for aux?
                     cri_tc_repr = Representation(name=self.critic.repr.name, layer_norm=self.actor.layer_norm)
                     #@TODO use normalized obs?
@@ -183,6 +209,24 @@ class DDPG(object):
                     self.cri_tc_loss = tf.nn.l2_loss(cri_repr1-cri_repr0)
                     self.aux_losses += self.cri_tc_loss
                     self.aux_vars.update(set(cri_tc_repr.trainable_vars))
+                
+                elif auxtask == 'prop':
+                    cri_prop_repr = Representation(name=self.critic.repr.name, layer_norm=self.critic.layer_norm)
+                    cri_repr0 = cri_prop_repr(self.obs0, reuse=True)
+                    cri_repr1 = cri_prop_repr(self.obs1, reuse=True)
+                    cri_repr100 = cri_prop_repr(self.obs100, reuse=True)
+                    cri_repr101 = cri_prop_repr(self.obs101, reuse=True)
+                    cri_prop_ds1 = tf.norm(cri_repr1-cri_repr0,axis=1)
+                    cri_prop_ds2 = tf.norm(cri_repr101-cri_repr100,axis=1)
+                    cri_prop_statediff = tf.square(cri_prop_ds2-cri_prop_ds1)
+                    cri_prop_actiondiff = tf.square(self.actions100-self.actions)
+                    self.cri_prop_loss = cri_prop_statediff*cri_prop_actiondiff
+                    self.aux_losses += self.cri_prop_loss
+                    self.aux_vars.update(set(cri_prop_repr.trainable_vars))
+                
+                else:
+                    raise ValueError('task {} not recognized'.format(auxtask))
+                
 
         self.aux_vars = list(self.aux_vars)
         self.aux_grads = U.flatgrad(self.aux_losses, self.aux_vars, clip_norm=self.clip_norm)
@@ -328,7 +372,11 @@ class DDPG(object):
 
     def train(self):
         # Get a batch.
-        batch = self.memory.sample(batch_size=self.batch_size)
+        if self.aux_tasks is not None:
+            batch = self.memory.sampletwice(batch_size=self.batch_size)
+        else:
+            batch = self.memory.sample(batch_size=self.batch_size)
+        
 
         if self.normalize_returns and self.enable_popart:
             old_mean, old_std, target_Q = self.sess.run([self.ret_rms.mean, self.ret_rms.std, self.target_Q], feed_dict={
@@ -374,7 +422,7 @@ class DDPG(object):
             aux_dict = {}
             aux_ops = {'grads':self.aux_grads}
             for index, auxtask in enumerate(self.aux_tasks):
-                if auxtask is 'tc':
+                if auxtask == 'tc':
                     aux_dict.update({
                         self.obs0: batch['obs0'],
                         self.obs1: batch['obs1']})
@@ -383,6 +431,19 @@ class DDPG(object):
                         aux_ops.update({'tc':self.act_tc_loss})
                     elif self.aux_apply == 'critic':
                         aux_ops.update({'tc':self.cri_tc_loss})
+                if auxtask == 'prop':
+                    aux_dict.update({
+                        self.obs0: batch['obs0'],
+                        self.obs1: batch['obs1'],
+                        self.obs100: batch['obs100'],
+                        self.obs101: batch['obs101'],
+                        self.actions: batch['actions'],
+                        self.actions100: batch['actions100']})
+                    # add a tc loss for tensorboard
+                    if self.aux_apply == 'actor' or self.aux_apply == 'both':
+                        aux_ops.update({'prop':self.act_prop_loss})
+                    elif self.aux_apply == 'critic':
+                        aux_ops.update({'prop':self.cri_prop_loss})
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
             auxgrads = auxoutputs['grads']
             self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)

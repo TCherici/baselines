@@ -67,6 +67,39 @@ class Memory(object):
             'terminals1': array_min2d(terminal1_batch),
         }
         return result
+        
+    def sampletwice(self, batch_size):
+        # Draw such that we always have a proceeding element and at least 100 steps to follow.
+        batch_idxs = np.random.random_integers(self.nb_entries - 202, size=batch_size)
+        # Draw comparison elements at a random distance between 100 and 200 steps from their relative
+        #  (to increase training distribution)
+        batch_idxs100 = batch_idxs + np.random.random_integers(100, 200, size=batch_size)
+
+        obs0_batch = self.observations0.get_batch(batch_idxs)
+        obs1_batch = self.observations1.get_batch(batch_idxs)
+        action_batch = self.actions.get_batch(batch_idxs)
+        reward_batch = self.rewards.get_batch(batch_idxs)
+        terminal1_batch = self.terminals1.get_batch(batch_idxs)
+        
+        obs100_batch = self.observations0.get_batch(batch_idxs100)
+        obs101_batch = self.observations1.get_batch(batch_idxs100)
+        action100_batch = self.actions.get_batch(batch_idxs100)
+        reward100_batch = self.rewards.get_batch(batch_idxs100)
+        terminal101_batch = self.terminals1.get_batch(batch_idxs100)
+
+        result = {
+            'obs0': array_min2d(obs0_batch),
+            'obs1': array_min2d(obs1_batch),
+            'rewards': array_min2d(reward_batch),
+            'actions': array_min2d(action_batch),
+            'terminals1': array_min2d(terminal1_batch),
+            'obs100': array_min2d(obs100_batch),
+            'obs101': array_min2d(obs101_batch),
+            'rewards100': array_min2d(reward100_batch),
+            'actions100': array_min2d(action100_batch),
+            'terminals100': array_min2d(terminal101_batch),
+        }
+        return result
 
     def append(self, obs0, action, reward, obs1, terminal1, training=True):
         if not training:
