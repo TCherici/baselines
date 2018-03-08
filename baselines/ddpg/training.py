@@ -117,6 +117,11 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 epoch_aux_losses = {}
                 for name in aux_tasks:
                     epoch_aux_losses['aux/'+name] = []
+                
+                epoch_aux_losses['aux/statesim'] = []
+                epoch_aux_losses['aux/dstatediff'] = []
+                epoch_aux_losses['aux/acsim'] = []
+                
                 epoch_adaptive_distances = []
                 for t_train in range(nb_train_steps):
                     # Adapt param noise, if necessary.

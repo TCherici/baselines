@@ -82,6 +82,7 @@ def run(env_id, seed, noise_type, layer_norm, evaluation, **kwargs):
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
+    parser.add_argument('--log-dir', type=str, default=None)
     parser.add_argument('--env-id', type=str, default='Humanoid-v2')
     boolean_flag(parser, 'render-eval', default=False)
     boolean_flag(parser, 'layer-norm', default=True)
@@ -109,8 +110,8 @@ def parse_args():
     parser.add_argument('--aux-tasks', nargs='*', type=str, default='')
     parser.add_argument('--tc-lambda', type=float, default=1.)
     parser.add_argument('--prop-lambda', type=float, default=100.)
-    parser.add_argument('--caus-lambda', type=float, default=1e6)
-    parser.add_argument('--repeat-lambda', type=float, default=100.)
+    parser.add_argument('--caus-lambda', type=float, default=1e7)
+    parser.add_argument('--repeat-lambda', type=float, default=1e4)
     
     boolean_flag(parser, 'evaluation', default=False)
     args = parser.parse_args()
@@ -126,6 +127,8 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     if MPI.COMM_WORLD.Get_rank() == 0:
-        logger.configure()
+        logger.configure(args['log_dir'])
+    
+    del args['log_dir']
     # Run actual script.
     run(**args)
