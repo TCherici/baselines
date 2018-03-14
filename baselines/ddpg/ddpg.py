@@ -218,12 +218,11 @@ class DDPG(object):
                     act_repeat_statesimilarity = tf.exp(-tf.square(act_repeat_repr100-act_repeat_repr0))
                     act_repeat_dstatediff = tf.square(act_repeat_ds100-act_repeat_ds)
                     act_repeat_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
-                    
+                    """
                     self.stsim = tf.reduce_mean(act_repeat_statesimilarity)
                     self.dsdiff = tf.reduce_mean(act_repeat_dstatediff)
                     self.acsim = tf.reduce_mean(act_repeat_actionsimilarity)
-                    
-                    
+                    """
                     self.act_repeat_loss = tf.multiply(act_repeat_statesimilarity,tf.multiply(act_repeat_dstatediff,act_repeat_actionsimilarity)) * self.aux_lambdas['repeat']
                     self.aux_losses += self.act_repeat_loss
                     self.aux_vars.update(set(act_repeat_repr.trainable_vars))
@@ -532,9 +531,11 @@ class DDPG(object):
                         aux_ops.update({'repeat':self.act_repeat_loss})
                     elif self.aux_apply == 'critic':
                         aux_ops.update({'repeat':self.cri_repeat_loss})
+                    """
                     aux_ops.update({'statesim':self.stsim,
                                     'dstatediff':self.dsdiff,
                                     'acsim':self.acsim})
+                    """
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
             auxgrads = auxoutputs['grads']
             self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)

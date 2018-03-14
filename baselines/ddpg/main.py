@@ -109,7 +109,7 @@ def parse_args():
     parser.add_argument('--aux-apply', type=str, default='both')
     parser.add_argument('--aux-tasks', nargs='*', type=str, default='')
     parser.add_argument('--tc-lambda', type=float, default=1.)
-    parser.add_argument('--prop-lambda', type=float, default=100.)
+    parser.add_argument('--prop-lambda', type=float, default=10.)
     parser.add_argument('--caus-lambda', type=float, default=1e7)
     parser.add_argument('--repeat-lambda', type=float, default=1e4)
     
