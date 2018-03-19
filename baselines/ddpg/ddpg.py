@@ -227,8 +227,13 @@ class DDPG(object):
                     self.aux_losses += self.act_repeat_loss
                     self.aux_vars.update(set(act_repeat_repr.trainable_vars))
                 
+                elif auxtask == 'predict':
+                    act_pred = Predictor(name=self.actor.repr.name, layer_norm=self.actor.layer_norm)
+                    act_pred0 = act_pred(self.obs0, reuse=True)
+                    
                 else:
                     raise ValueError('task {} not recognized'.format(auxtask))
+                    
                 
 
         if self.aux_apply == 'critic' or self.aux_apply == 'both':
@@ -321,6 +326,8 @@ class DDPG(object):
     def setup_actor_optimizer(self):
         logger.info('setting up actor optimizer')
         self.actor_loss = -tf.reduce_mean(self.critic_with_actor_tf)
+        # TRY
+        self.actor_loss = self.actor_loss / tf.stop_gradient(self.actor_loss)
         actor_shapes = [var.get_shape().as_list() for var in self.actor.trainable_vars]
         actor_nb_params = sum([reduce(lambda x, y: x * y, shape) for shape in actor_shapes])
         logger.info('  actor shapes: {}'.format(actor_shapes))
@@ -332,7 +339,9 @@ class DDPG(object):
     def setup_critic_optimizer(self):
         logger.info('setting up critic optimizer')
         normalized_critic_target_tf = tf.clip_by_value(normalize(self.critic_target, self.ret_rms), self.return_range[0], self.return_range[1])
-        self.critic_loss = tf.reduce_mean(tf.square(self.normalized_critic_tf - normalized_critic_target_tf))
+        self.critic_loss = tf.reduce_mean(tf.square(self.normalized_critic_tf - normalized_critic_target_tf))        
+        # TRY
+        self.critic_loss = self.critic_loss / tf.stop_gradient(self.critic_loss)
         if self.critic_l2_reg > 0.:
             critic_reg_vars = [var for var in self.critic.trainable_vars if 'kernel' in var.name and 'output' not in var.name]
             for var in critic_reg_vars:

@@ -27,6 +27,11 @@ class Model(object):
     def perturbable_vars(self):
         return [var for var in self.trainable_vars if 'LayerNorm' not in var.name]
 
+    @property
+    def output_vars(self):
+        output_vars = [var for var in self.trainable_vars if 'output' in var.name]
+        return output_vars
+        
 class Representation(Model):
     def __init__(self, name=None, layer_norm=True):
         super(Representation, self).__init__(name=name)
@@ -95,7 +100,14 @@ class Critic(Model):
             x = tf.layers.dense(x, 1, kernel_initializer=tf.random_uniform_initializer(minval=-3e-3, maxval=3e-3))
         return x
 
-    @property
-    def output_vars(self):
-        output_vars = [var for var in self.trainable_vars if 'output' in var.name]
-        return output_vars
+class Predictor(Model):
+    def __init__(self, name, layer_norm=True): 
+        super(Predictor, self).__init__(name=name+'_pred')
+        self.layer_norm = layer_norm
+        repr_name = name + '_repr'
+        self.repr = Representation(name=repr_name, layer_norm=self.layer_norm)
+        
+    def __call__(self, obs, reuse=False):
+        representation = self.repr(obs,
+        
+        
