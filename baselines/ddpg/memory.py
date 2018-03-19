@@ -40,7 +40,7 @@ def array_min2d(x):
 
 
 class Memory(object):
-    def __init__(self, limit, action_shape, observation_shape):
+    def __init__(self, limit, action_shape, observation_shape, seed):
         self.limit = limit
 
         self.observations0 = RingBuffer(limit, shape=observation_shape)
@@ -48,6 +48,7 @@ class Memory(object):
         self.rewards = RingBuffer(limit, shape=(1,))
         self.terminals1 = RingBuffer(limit, shape=(1,))
         self.observations1 = RingBuffer(limit, shape=observation_shape)
+        np.random.seed(seed)
 
     def sample(self, batch_size):
         # Draw such that we always have a proceeding element.

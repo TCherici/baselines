@@ -99,7 +99,7 @@ class Critic(Model):
 
             x = tf.layers.dense(x, 1, kernel_initializer=tf.random_uniform_initializer(minval=-3e-3, maxval=3e-3))
         return x
-
+"""
 class Predictor(Model):
     def __init__(self, name, layer_norm=True): 
         super(Predictor, self).__init__(name=name+'_pred')
@@ -107,7 +107,22 @@ class Predictor(Model):
         repr_name = name + '_repr'
         self.repr = Representation(name=repr_name, layer_norm=self.layer_norm)
         
-    def __call__(self, obs, reuse=False):
-        representation = self.repr(obs,
+    def __call__(self, obs, action, reuse=False):
+        representation = self.repr(obs, reuse=reuse)
         
+        with tf.variable_scope(self.name) as scope:
+            if reuse:
+                scope.reuse_variables()
+            
+            x = representation(obs)
+            x = tf.concat([x, action], axis=-1)
+            x = tf.layers.dense(x, 64)
+            if self.layer_norm:
+                x = tc.layers.layer_norm(x, center=True, scale=True)
+            x = tf.nn.relu(x)
+            print(tf.shape(obs))
+            assert false
+            x = tf.layers.dense(x, tf.shape(obs)[1])
+        return x
+"""        
         
