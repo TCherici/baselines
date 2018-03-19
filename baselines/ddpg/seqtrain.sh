@@ -1,7 +1,7 @@
 #!/bin/bash
-for env in 'InvertedPendulum-v2' 'HalfCheetah-v2' 'Humanoid-v2'
+for env in 'Humanoid-v2'
 do
-    for num in $(seq 1 3)
+    for num in $(seq 2 3)
     do
         for aux in '' 'tc' 'prop' 'caus' 'repeat'
         do
