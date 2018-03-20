@@ -77,18 +77,7 @@ class DDPG(object):
         self.critic_target = tf.placeholder(tf.float32, shape=(None, 1), name='critic_target')
         self.param_noise_stddev = tf.placeholder(tf.float32, shape=(), name='param_noise_stddev')
         
-        # Aux Inputs.        
-        self.aux_apply = aux_apply
-        self.aux_tasks = aux_tasks
-        self.aux_lambdas = aux_lambdas
 
-        if 'prop' in self.aux_tasks or 'caus' in self.aux_tasks or 'repeat' in self.aux_tasks:
-            self.obs100 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs100')
-            self.obs101 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs101')
-            self.actions100 = tf.placeholder(tf.float32, shape=(None,) + action_shape, name='actions100')
-        if 'caus' in self.aux_tasks:
-            self.rewards100 = tf.placeholder(tf.float32, shape=(None, 1), name='rewards100')
-        
         # Parameters.
         self.gamma = gamma
         self.tau = tau
@@ -129,7 +118,25 @@ class DDPG(object):
                 self.ret_rms = RunningMeanStd()
         else:
             self.ret_rms = None
-            
+        
+        # Aux Inputs.        
+        self.aux_apply = aux_apply
+        self.aux_tasks = aux_tasks
+        self.aux_lambdas = aux_lambdas
+
+        if 'prop' in self.aux_tasks or 'caus' in self.aux_tasks or 'repeat' in self.aux_tasks:
+            self.obs100 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs100')
+            self.obs101 = tf.placeholder(tf.float32, shape=(None,) + observation_shape, name='obs101')
+            self.actions100 = tf.placeholder(tf.float32, shape=(None,) + action_shape, name='actions100')
+            self.norm_obs100 = tf.clip_by_value(normalize(self.obs100, self.obs_rms),
+            self.observation_range[0], self.observation_range[1])
+            self.norm_obs101 = tf.clip_by_value(normalize(self.obs101, self.obs_rms),
+            self.observation_range[0], self.observation_range[1])
+        if 'caus' in self.aux_tasks:
+            self.rewards100 = tf.placeholder(tf.float32, shape=(None, 1), name='rewards100')
+        
+        
+        
         # Create target networks.
         target_actor = deepcopy(actor)
         target_actor.name = 'target_actor'
@@ -162,11 +169,6 @@ class DDPG(object):
 
 
         if self.aux_tasks:
-            self.norm_obs100 = tf.clip_by_value(normalize(self.obs100, self.obs_rms),
-            self.observation_range[0], self.observation_range[1])
-            self.norm_obs101 = tf.clip_by_value(normalize(self.obs101, self.obs_rms),
-            self.observation_range[0], self.observation_range[1])
-            
             logger.info("aux_tasks:{}".format(self.aux_tasks))
             self.setup_aux_optimizer()
     
@@ -185,6 +187,7 @@ class DDPG(object):
                     act_tc_repr0 = act_tc_repr(self.norm_obs0, reuse=True)
                     act_tc_repr1 = act_tc_repr(self.norm_obs1, reuse=True)
                     self.act_tc_loss = tf.nn.l2_loss(act_tc_repr1-act_tc_repr0) * self.aux_lambdas['tc']
+                    self.act_tc_loss = self.act_tc_loss/(tf.stop_gradient(tf.abs(self.act_tc_loss))+1e-7)
                     self.aux_losses += self.act_tc_loss
                     self.aux_vars.update(set(act_tc_repr.trainable_vars))
                     
@@ -199,6 +202,7 @@ class DDPG(object):
                     act_prop_dstatemagdiff = tf.square(act_prop_dstatemag100-act_prop_dstatemag)
                     act_prop_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
                     self.act_prop_loss = tf.multiply(act_prop_dstatemagdiff,act_prop_actionsimilarity) * self.aux_lambdas['prop']
+                    self.act_prop_loss = self.act_prop_loss/(tf.stop_gradient(tf.abs(self.act_prop_loss))+1e-7)
                     self.aux_losses += self.act_prop_loss
                     self.aux_vars.update(set(act_prop_repr.trainable_vars))
                 
@@ -210,6 +214,7 @@ class DDPG(object):
                     act_caus_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
                     act_caus_rewarddiff = tf.square(self.rewards100-self.rewards) / tf.norm(tf.square(self.rewards)+tf.square(self.rewards100), ord=1)
                     self.act_caus_loss = tf.multiply(act_caus_statesimilarity,tf.multiply(act_caus_actionsimilarity,act_caus_rewarddiff)) * self.aux_lambdas['caus']
+                    self.act_caus_loss = self.act_caus_loss/(tf.stop_gradient(tf.abs(self.act_caus_loss))+1e-7)
                     self.aux_losses += self.act_caus_loss
                     self.aux_vars.update(set(act_caus_repr.trainable_vars))
                 
@@ -230,6 +235,7 @@ class DDPG(object):
                     self.acsim = tf.reduce_mean(act_repeat_actionsimilarity)
                     """
                     self.act_repeat_loss = tf.multiply(act_repeat_statesimilarity,tf.multiply(act_repeat_dstatediff,act_repeat_actionsimilarity)) * self.aux_lambdas['repeat']
+                    self.act_repeat_loss = self.act_repeat_loss/(tf.stop_gradient(tf.abs(self.act_repeat_loss))+1e-7)
                     self.aux_losses += self.act_repeat_loss
                     self.aux_vars.update(set(act_repeat_repr.trainable_vars))
                 
@@ -252,6 +258,7 @@ class DDPG(object):
                     cri_repr0 = cri_tc_repr(self.norm_obs0, reuse=True)
                     cri_repr1 = cri_tc_repr(self.norm_obs1, reuse=True)
                     self.cri_tc_loss = tf.nn.l2_loss(cri_repr1-cri_repr0) * self.aux_lambdas['tc']
+                    self.cri_tc_loss = self.cri_tc_loss/tf.stop_gradient(tf.abs(self.cri_tc_loss))
                     self.aux_losses += self.cri_tc_loss
                     self.aux_vars.update(set(cri_tc_repr.trainable_vars))
                 
@@ -266,7 +273,7 @@ class DDPG(object):
                     cri_prop_dstatemagdiff = tf.square(cri_prop_dstatemag100-cri_prop_dstatemag)
                     cri_prop_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
                     self.cri_prop_loss = tf.multiply(cri_prop_dstatemagdiff,cri_prop_actionsimilarity) * self.aux_lambdas['prop']
-                    self.
+                    self.cri_prop_loss = self.cri_prop_loss/(tf.stop_gradient(tf.abs(self.cri_prop_loss))+1e-7)
                     self.aux_losses += self.cri_prop_loss
                     self.aux_vars.update(set(cri_prop_repr.trainable_vars))
                 
@@ -278,7 +285,7 @@ class DDPG(object):
                     cri_caus_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
                     cri_caus_rewarddiff = tf.square(self.rewards100-self.rewards) / tf.norm(tf.square(self.rewards)+tf.square(self.rewards100), ord=1)
                     self.cri_caus_loss = tf.multiply(cri_caus_statesimilarity,tf.multiply(cri_caus_actionsimilarity,cri_caus_rewarddiff)) * self.aux_lambdas['caus']
-                    self.cri_caus_loss = self.cri_caus_loss/tf.stop_gradient(tf.abs(self.cri_caus_loss))
+                    self.cri_caus_loss = self.cri_caus_loss/(tf.stop_gradient(tf.abs(self.cri_caus_loss))+1e-7)
                     self.aux_losses += self.cri_caus_loss
                     self.aux_vars.update(set(cri_caus_repr.trainable_vars))
                                     
@@ -294,14 +301,14 @@ class DDPG(object):
                     cri_repeat_dstatediff = tf.square(cri_repeat_ds100-cri_repeat_ds)
                     cri_repeat_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
                     self.cri_repeat_loss = tf.multiply(cri_repeat_statesimilarity,tf.multiply(cri_repeat_dstatediff,cri_repeat_actionsimilarity)) * self.aux_lambdas['repeat']
-                    self.cri_repeat_loss = self.cri_repeat_loss/tf.stop_gradient(tf.abs(self.cri_repeat_loss))
+                    self.cri_repeat_loss = self.cri_repeat_loss/(tf.stop_gradient(tf.abs(self.cri_repeat_loss))+1e-7)
                     self.aux_losses += self.cri_repeat_loss
                     self.aux_vars.update(set(cri_repeat_repr.trainable_vars))
                 
                 else:
                     raise ValueError('task {} not recognized'.format(auxtask))
                 
-        self.aux_losses = self.aux_losses
+        self.aux_losses = self.aux_losses / (2 * len(self.aux_tasks))
         self.aux_vars = list(self.aux_vars)
         self.aux_grads = U.flatgrad(self.aux_losses, self.aux_vars, clip_norm=self.clip_norm)
         self.aux_optimizer = MpiAdam(var_list=self.aux_vars,

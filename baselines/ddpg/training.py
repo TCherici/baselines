@@ -76,6 +76,8 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                     # Predict next action.
                     action, q = agent.pi(obs, apply_noise=True, compute_Q=True)
                     assert action.shape == env.action_space.shape
+                    
+                    #print("action mean:{} -- Q: {}".format(np.mean(action), q))
 
                     # Execute next action.
                     if rank == 0 and render:
@@ -123,6 +125,7 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 epoch_aux_losses['aux/acsim'] = []
                 """
                 epoch_adaptive_distances = []
+                
                 for t_train in range(nb_train_steps):
                     # Adapt param noise, if necessary.
                     if memory.nb_entries >= batch_size and t % param_noise_adaption_interval == 0:
@@ -130,12 +133,16 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                         epoch_adaptive_distances.append(distance)
 
                     cl, al, auxl = agent.train()
+                    
+                    
                     epoch_critic_losses.append(cl)
                     epoch_actor_losses.append(al)
                     if aux_tasks:
                         for name, value in auxl.items():
                             if name == 'grads':
+                                #print('mean grads:{}'.format(np.mean(np.abs(value))))
                                 continue
+                            #print(name, value)
                             epoch_aux_losses['aux/'+name].append(value)
 
                     agent.update_target_net()
