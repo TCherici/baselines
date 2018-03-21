@@ -43,7 +43,7 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
     episode = 0
     eval_episode_rewards_history = deque(maxlen=100)
     episode_rewards_history = deque(maxlen=100)
-    with U.single_threaded_session() as sess:
+    with U.make_session() as sess:
         # Prepare everything.
         agent.initialize(sess)
         sess.graph.finalize()
