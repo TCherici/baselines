@@ -226,7 +226,6 @@ class DDPG(object):
                     act_repeat_ds = act_repeat_repr1-act_repeat_repr0
                     act_repeat_ds100 = act_repeat_repr101-act_repeat_repr100
                     act_repeat_statesimilarity = tf.exp(-tf.norm(tf.clip_by_value(act_repeat_repr100-act_repeat_repr0,1e-10,1e10),axis=1))
-                    
                     act_repeat_dstatediff = tf.square(act_repeat_ds100-act_repeat_ds)
                     act_repeat_actionsimilarity = tf.exp(-tf.norm(tf.clip_by_value(self.actions100-self.actions,1e-10,1e10),axis=1))
                     self.act_repeat_loss = tf.reduce_mean(tf.multiply(act_repeat_statesimilarity,tf.multiply(act_repeat_dstatediff,act_repeat_actionsimilarity))) * self.aux_lambdas['repeat']
