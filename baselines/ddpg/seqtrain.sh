@@ -2,12 +2,12 @@
 
 logdirpath='/home/tcherici/seqrunsnorm3'
 
-for num in $(seq 1 3)
+for num in $(seq 0 3)
 do
     for env in 'Humanoid-v2'
     do
 
-        for aux in '' 'tc' 'prop' 'caus' 'repeat'
+        for aux in '' 'tc' 'prop' 'caus' 'repeat' 'predict'
         do
             LOG_DIR="$logdirpath/$env""_$aux""_seed$num"
             echo "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

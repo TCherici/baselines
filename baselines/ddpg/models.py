@@ -111,17 +111,13 @@ class Predictor(Model):
         representation = self.repr(obs, reuse=reuse)
         
         with tf.variable_scope(self.name) as scope:
-            if reuse:
-                scope.reuse_variables()
-            
-            x = representation(obs)
+                        
+            x = representation
             x = tf.concat([x, action], axis=-1)
             x = tf.layers.dense(x, 64)
             if self.layer_norm:
                 x = tc.layers.layer_norm(x, center=True, scale=True)
             x = tf.nn.relu(x)
-            print(tf.shape(obs))
-            assert false
-            x = tf.layers.dense(x, tf.shape(obs)[1])
+            x = tf.layers.dense(x, obs.get_shape()[1])
         return x     
         

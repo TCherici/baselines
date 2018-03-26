@@ -9,7 +9,7 @@ from baselines import logger
 from baselines.common.mpi_adam import MpiAdam
 import baselines.common.tf_util as U
 from baselines.common.mpi_running_mean_std import RunningMeanStd
-from baselines.ddpg.models import Representation
+from baselines.ddpg.models import Representation, Predictor
 from mpi4py import MPI
 
 def normalize(x, stats):
@@ -233,7 +233,7 @@ class DDPG(object):
                     self.aux_vars.update(set(act_repeat_repr.trainable_vars))
                 
                 elif auxtask == 'predict':
-                    act_pred = Predictor(name=self.actor.repr.name, layer_norm=self.actor.layer_norm)
+                    act_pred = Predictor(name=self.actor.name, layer_norm=self.actor.layer_norm)
                     act_pred_reconstruction = act_pred(self.norm_obs0, self.actions, reuse=True)
                     self.act_pred_loss = tf.nn.l2_loss(act_pred_reconstruction-self.norm_obs1)
                     self.aux_losses += normalize_loss(self.act_pred_loss)
@@ -296,7 +296,7 @@ class DDPG(object):
                     self.aux_vars.update(set(cri_repeat_repr.trainable_vars))
                     
                 elif auxtask == 'predict':
-                    cri_pred = Predictor(name=self.critic.repr.name, layer_norm=self.critic.layer_norm)
+                    cri_pred = Predictor(name=self.critic.name, layer_norm=self.critic.layer_norm)
                     cri_pred_reconstruction = cri_pred(self.norm_obs0, self.actions, reuse=True)
                     self.cri_pred_loss = tf.nn.l2_loss(cri_pred_reconstruction-self.norm_obs1)
                     self.aux_losses += normalize_loss(self.cri_pred_loss)
@@ -556,9 +556,9 @@ class DDPG(object):
                         self.actions: batch['actions']})
                     # add a tc loss for tensorboard
                     if self.aux_apply == 'actor' or self.aux_apply == 'both':
-                        aux_ops.update({'predict':self.act_predict_loss})
+                        aux_ops.update({'predict':self.act_pred_loss})
                     elif self.aux_apply == 'critic':
-                        aux_ops.update({'repeat':self.cri_predict_loss})
+                        aux_ops.update({'predict':self.cri_pred_loss})
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
             auxgrads = auxoutputs['grads']
             self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)
