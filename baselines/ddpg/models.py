@@ -99,7 +99,7 @@ class Critic(Model):
 
             x = tf.layers.dense(x, 1, kernel_initializer=tf.random_uniform_initializer(minval=-3e-3, maxval=3e-3))
         return x
-"""
+
 class Predictor(Model):
     def __init__(self, name, layer_norm=True): 
         super(Predictor, self).__init__(name=name+'_pred')
@@ -123,6 +123,5 @@ class Predictor(Model):
             print(tf.shape(obs))
             assert false
             x = tf.layers.dense(x, tf.shape(obs)[1])
-        return x
-"""        
+        return x     
         
