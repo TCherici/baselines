@@ -61,7 +61,7 @@ def get_perturbed_actor_updates(actor, perturbed_actor, param_noise_stddev):
     return tf.group(*updates)
     
 def normalize_loss(loss):
-    normloss = loss/(tf.stop_gradient(tf.abs(loss))+1e-7)
+    normloss = loss/(tf.stop_gradient(tf.abs(loss))+1e-9)
     return normloss
 
 
@@ -198,10 +198,10 @@ class DDPG(object):
                     act_prop_repr1 = act_prop_repr(self.norm_obs1, reuse=True)
                     act_prop_repr100 = act_prop_repr(self.norm_obs100, reuse=True)
                     act_prop_repr101 = act_prop_repr(self.norm_obs101, reuse=True)
-                    act_prop_dstatemag = tf.norm(act_prop_repr1-act_prop_repr0,axis=1)
-                    act_prop_dstatemag100 = tf.norm(act_prop_repr101-act_prop_repr100,axis=1)
+                    act_prop_dstatemag = tf.norm(tf.clip_by_value(act_prop_repr1-act_prop_repr0,1e-10,1e10),axis=1)
+                    act_prop_dstatemag100 = tf.norm(tf.clip_by_value(act_prop_repr101-act_prop_repr100,1e-10,1e10),axis=1)
                     act_prop_dstatemagdiff = tf.square(act_prop_dstatemag100-act_prop_dstatemag)
-                    act_prop_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
+                    act_prop_actionsimilarity = tf.exp(-tf.norm(tf.clip_by_value(self.actions100-self.actions,1e-10,1e10), axis=1))
                     self.act_prop_loss = tf.reduce_mean(tf.multiply(act_prop_dstatemagdiff,act_prop_actionsimilarity)) * self.aux_lambdas['prop']
                     self.aux_losses += normalize_loss(self.act_prop_loss)
                     self.aux_vars.update(set(act_prop_repr.trainable_vars))
@@ -211,7 +211,7 @@ class DDPG(object):
                     act_caus_repr0 = act_caus_repr(self.norm_obs0, reuse=True)
                     act_caus_repr100 = act_caus_repr(self.norm_obs100, reuse=True)
                     act_caus_statesimilarity = tf.exp(-tf.square(act_caus_repr100-act_caus_repr0))
-                    act_caus_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
+                    act_caus_actionsimilarity = tf.exp(-tf.norm(tf.clip_by_value(self.actions100-self.actions,1e-10,1e10), axis=1))
                     act_caus_rewarddiff = tf.square(self.rewards100-self.rewards)
                     self.act_caus_loss = tf.reduce_mean(tf.multiply(act_caus_statesimilarity,tf.multiply(act_caus_actionsimilarity,act_caus_rewarddiff))) * self.aux_lambdas['caus']
                     self.aux_losses += normalize_loss(self.act_caus_loss)
@@ -225,9 +225,10 @@ class DDPG(object):
                     act_repeat_repr101 = act_repeat_repr(self.norm_obs101, reuse=True)
                     act_repeat_ds = act_repeat_repr1-act_repeat_repr0
                     act_repeat_ds100 = act_repeat_repr101-act_repeat_repr100
-                    act_repeat_statesimilarity = tf.exp(-tf.square(act_repeat_repr100-act_repeat_repr0))
+                    act_repeat_statesimilarity = tf.exp(-tf.norm(tf.clip_by_value(act_repeat_repr100-act_repeat_repr0,1e-10,1e10),axis=1))
+                    
                     act_repeat_dstatediff = tf.square(act_repeat_ds100-act_repeat_ds)
-                    act_repeat_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
+                    act_repeat_actionsimilarity = tf.exp(-tf.norm(tf.clip_by_value(self.actions100-self.actions,1e-10,1e10),axis=1))
                     self.act_repeat_loss = tf.reduce_mean(tf.multiply(act_repeat_statesimilarity,tf.multiply(act_repeat_dstatediff,act_repeat_actionsimilarity))) * self.aux_lambdas['repeat']
                     self.aux_losses += normalize_loss(self.act_repeat_loss)
                     self.aux_vars.update(set(act_repeat_repr.trainable_vars))
@@ -261,10 +262,10 @@ class DDPG(object):
                     cri_prop_repr1 = cri_prop_repr(self.norm_obs1, reuse=True)
                     cri_prop_repr100 = cri_prop_repr(self.norm_obs100, reuse=True)
                     cri_prop_repr101 = cri_prop_repr(self.norm_obs101, reuse=True)
-                    cri_prop_dstatemag = tf.norm(cri_prop_repr1-cri_prop_repr0,axis=1)
-                    cri_prop_dstatemag100 = tf.norm(cri_prop_repr101-cri_prop_repr100,axis=1)
+                    cri_prop_dstatemag = tf.norm(tf.clip_by_value(cri_prop_repr1-cri_prop_repr0,1e-10,1e10),axis=1)
+                    cri_prop_dstatemag100 = tf.norm(tf.clip_by_value(cri_prop_repr101-cri_prop_repr100,1e-10,1e10),axis=1)
                     cri_prop_dstatemagdiff = tf.square(cri_prop_dstatemag100-cri_prop_dstatemag)
-                    cri_prop_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
+                    cri_prop_actionsimilarity = tf.exp(-tf.norm(tf.clip_by_value(self.actions100-self.actions,1e-10,1e10), axis=1))
                     self.cri_prop_loss = tf.reduce_mean(tf.multiply(cri_prop_dstatemagdiff,cri_prop_actionsimilarity)) * self.aux_lambdas['prop']
                     self.aux_losses += normalize_loss(self.cri_prop_loss)
                     self.aux_vars.update(set(cri_prop_repr.trainable_vars))
@@ -274,7 +275,7 @@ class DDPG(object):
                     cri_caus_repr0 = cri_caus_repr(self.norm_obs0, reuse=True)
                     cri_caus_repr100 = cri_caus_repr(self.norm_obs100, reuse=True)
                     cri_caus_statesimilarity = tf.exp(-tf.square(cri_caus_repr100-cri_caus_repr0))
-                    cri_caus_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
+                    cri_caus_actionsimilarity = tf.exp(-tf.norm(tf.clip_by_value(self.actions100-self.actions,1e-10,1e10), axis=1))
                     cri_caus_rewarddiff = tf.square(self.rewards100-self.rewards)
                     self.cri_caus_loss = tf.reduce_mean(tf.multiply(cri_caus_statesimilarity,tf.multiply(cri_caus_actionsimilarity,cri_caus_rewarddiff))) * self.aux_lambdas['caus']
                     self.aux_losses += normalize_loss(self.cri_caus_loss)
@@ -288,9 +289,9 @@ class DDPG(object):
                     cri_repeat_repr101 = cri_repeat_repr(self.norm_obs101, reuse=True)
                     cri_repeat_ds = cri_repeat_repr1-cri_repeat_repr0
                     cri_repeat_ds100 = cri_repeat_repr101-cri_repeat_repr100
-                    cri_repeat_statesimilarity = tf.exp(-tf.norm(cri_repeat_repr100-cri_repeat_repr0))
+                    cri_repeat_statesimilarity = tf.exp(-tf.norm(tf.clip_by_value(cri_repeat_repr100-cri_repeat_repr0,1e-10,1e10), axis=1))
                     cri_repeat_dstatediff = tf.square(cri_repeat_ds100-cri_repeat_ds)
-                    cri_repeat_actionsimilarity = tf.exp(-tf.norm(self.actions100-self.actions, axis=1))
+                    cri_repeat_actionsimilarity = tf.exp(-tf.norm(tf.clip_by_value(self.actions100-self.actions,1e-10,1e10), axis=1))
                     self.cri_repeat_loss = tf.reduce_mean(tf.multiply(cri_repeat_statesimilarity,tf.multiply(cri_repeat_dstatediff,cri_repeat_actionsimilarity))) * self.aux_lambdas['repeat']
                     self.aux_losses += normalize_loss(self.cri_repeat_loss)
                     self.aux_vars.update(set(cri_repeat_repr.trainable_vars))
