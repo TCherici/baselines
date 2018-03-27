@@ -70,7 +70,10 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
         epoch_qs = []
         epoch_episodes = 0
         for epoch in range(nb_epochs):
+            ep_rollout_times = []
+            ep_train_times = []
             for cycle in range(nb_epoch_cycles):
+                rollout_startt = time.time()
                 # Perform rollouts.
                 for t_rollout in range(nb_rollout_steps):
                     # Predict next action.
@@ -105,13 +108,15 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                         episode_step = 0
                         epoch_episodes += 1
                         episodes += 1
-
                         agent.reset()
                         obs = env.reset()
                 
                 # for the first 5 cycles just gather data
                 if epoch == 0 and cycle < 5:
                     continue
+                
+                train_startt = time.time()
+                ep_rollout_times.append(train_startt-rollout_startt)
                 
                 # Train.
                 epoch_actor_losses = []
@@ -141,11 +146,13 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                             epoch_aux_losses['aux/'+name].append(value)
 
                     agent.update_target_net()
-
-                # Evaluate.
-                eval_episode_rewards = []
-                eval_qs = []
+                
+                ep_train_times.append(time.time()-train_startt)
+                
                 if eval_env is not None:
+                    # Evaluate.
+                    eval_episode_rewards = []
+                    eval_qs = []
                     eval_episode_reward = 0.
                     for t_rollout in range(nb_eval_steps):
                         eval_action, eval_q = agent.pi(eval_obs, apply_noise=False, compute_Q=True)
@@ -160,7 +167,9 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                             eval_episode_rewards.append(eval_episode_reward)
                             eval_episode_rewards_history.append(eval_episode_reward)
                             eval_episode_reward = 0.
-
+            
+            print('rollout avg time (s): {}'.format(np.mean(ep_rollout_times)))
+            print('train avg time (s): {}'.format(np.mean(ep_train_times)))
             mpi_size = MPI.COMM_WORLD.Get_size()
             # Log stats.
             # XXX shouldn't call np.mean on variable length lists
