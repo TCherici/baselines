@@ -67,7 +67,7 @@ def magnitude(tensor, axis=1):
     mag = tf.reduce_sum(tf.square(tensor), axis=axis) / ax_len
     return mag
     
-def similarity(tensor, alpha=1.):
+def similarity(tensor, alpha=10.):
     # returns an index of similarity of tensor:
     #   if tensor value is 0, returns 1
     #   as tensor increases in value, returns quickly diminish
