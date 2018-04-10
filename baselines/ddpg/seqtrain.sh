@@ -1,12 +1,11 @@
 #!/bin/bash
 
-logdirpath='/home/tcherici/seqrunsnorm3'
+logdirpath='/home/tcherici/seqrunsnorm5_020418'
 
-for num in $(seq 0 3)
+for num in $(seq 4 5)
 do
     for env in 'Humanoid-v2'
     do
-
         for aux in '' 'tc' 'prop' 'caus' 'repeat' 'predict'
         do
             LOG_DIR="$logdirpath/$env""_$aux""_seed$num"

@@ -237,12 +237,12 @@ class DDPG(object):
             
             if 'prop' in self.aux_tasks:
                 # proportionality loss: 
-                #   punish the difference in magnitude of state change, given action mag similarity
+                #   punish the difference in magnitude of state change, given action similarity
                 #   for two unrelated steps
                 dsmag0 = magnitude(s1-s0)
                 dsmag100 = magnitude(s101-s100)
                 dsmagdiff = tf.square(dsmag100-dsmag0)
-                actmagsim = similarity(magnitude(self.actions100)-magnitude(self.actions))
+                actmagsim = similarity(magnitude(self.actions100-self.actions))
                 self.prop_loss = tf.reduce_mean(dsmagdiff * actmagsim)
                 self.aux_losses += normalize_loss(self.prop_loss)
             
@@ -477,7 +477,8 @@ class DDPG(object):
                 if auxtask == 'tc':
                     aux_dict.update({
                         self.obs0: batch['obs0'],
-                        self.obs1: batch['obs1']})
+                        self.obs1: batch['obs1'],
+                        self.actions: batch['actions']})
                     aux_ops.update({'tc':self.tc_loss})
                 if auxtask == 'prop':
                     aux_dict.update({
