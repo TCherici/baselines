@@ -21,18 +21,18 @@ COLORS = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple'
         'brown', 'orange', 'teal', 'coral', 'lightblue', 'lime', 'lavender', 'turquoise',
         'darkgreen', 'tan', 'salmon', 'gold', 'lightpurple', 'darkred', 'darkblue']
 
-def mean_confidence_interval(data, confidence=0.95):
+def mean_confidence_interval(data, confidence=0.68):
     a = 1.0*np.array(data)
-    print(a.shape)
     n = len(a)
-    m, se = np.mean(a), scipy.stats.sem(a)
-    h = se * sp.stats.t.ppf((1+confidence)/2., n-1)
+    m, se = np.mean(a,axis=0), scipy.stats.sem(a)
+    print(se.shape)
+    h = se * scipy.stats.t.ppf((1+confidence)/2., n-1)
     return m, m-h, m+h
 
 def get_data(maindir, keyword, num_timesteps, xaxis, plot_title):
     # read maindir and get a list of all runs with keyword
     fulldirlist = os.listdir(maindir) 
-    rewards = []
+    rewards_list = []
     for datadir in fulldirlist:
         if keyword in datadir: 
             print(datadir)
@@ -50,6 +50,7 @@ def get_data(maindir, keyword, num_timesteps, xaxis, plot_title):
                         f.seek(0)
                         for row in reader:
                             steps.append(row[stepsind])
+                        steps = steps[1:]
                             
                             
                     if labels[ind] == 'rollout/return_history':
@@ -58,15 +59,20 @@ def get_data(maindir, keyword, num_timesteps, xaxis, plot_title):
                         f.seek(0)
                         for row in reader:
                             rewards.append(row[rewardind])
+                        rewards = np.array(rewards[1:]).astype(float)
+                        rewards_list.append(np.array(rewards))
     
-    return steps, rewards
+    return steps, rewards_list
 
 
 # Define a function for the line plot with intervals
 def lineplotCI(x_data, y_data, sorted_x, low_CI, upper_CI, x_label, y_label, title, colorind=0):
     # Create the plot object
     _, ax = plt.subplots()
-
+    
+    x_data = np.array(x_data).astype(float)/1000
+    sorted_x = np.array(sorted_x).astype(float)/1000
+    
     # Plot the data, set the linewidth, color and transparency of the
     # line, provide a label for the legend
     ax.plot(x_data, y_data, lw = 1, color = COLORS[colorind], alpha = 1)
@@ -76,9 +82,15 @@ def lineplotCI(x_data, y_data, sorted_x, low_CI, upper_CI, x_label, y_label, tit
     ax.set_title(title)
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
-
+    
     # Display legend
     ax.legend(loc = 'best')
+    
+    print(x_data[0])
+    print(x_data[-1])
+    xticklist = [x for ind,x in enumerate(sorted_x) if x%100==0]
+    plt.xticks(xticklist)
+    #plt.xticks([])
 
 def main():
     import argparse
@@ -90,10 +102,10 @@ def main():
     parser.add_argument('--xaxis', help = 'Varible on X-axis', default = X_TIMESTEPS)
     parser.add_argument('--plot_title', help = 'Title of plot', default = 'no title')
     args = parser.parse_args()
-    index, data = get_data(args.maindir, args.keyword, args.num_timesteps, args.xaxis, args.plot_title)
-    
+    indexes, data = get_data(args.maindir, args.keyword, args.num_timesteps, args.xaxis, args.plot_title)
     med,low,high = mean_confidence_interval(data)
-    lineplotCI(index, med, index, low, high, xlabel='epoch', ylabel='base')
+    lineplotCI(indexes, med, indexes, low, high, x_label='steps (thousands)', y_label='reward distribution', title='test')
+    lineplotCI(indexes, med, indexes, low, high, x_label='steps (thousands)', y_label='reward distribution', title='test')
     
     plt.show()
 
