@@ -75,7 +75,9 @@ def similarity(tensor, alpha=10.):
     return tf.exp(- alpha * tensor)
     
 def normalize_loss(loss):
-    normloss = loss/(tf.stop_gradient(tf.abs(loss))+1e-9)
+    logger.warn('!! loss normalization deactivated !!')
+    normloss = loss
+    #normloss = loss/(tf.stop_gradient(tf.abs(loss))+1e-9)
     return normloss
 
 
