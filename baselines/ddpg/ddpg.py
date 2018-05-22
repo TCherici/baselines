@@ -464,6 +464,9 @@ class DDPG(object):
                       self.critic_target: target_Q}
         actor_grads, actor_loss, critic_grads, critic_loss = self.sess.run(ops, feed_dict=feed_dict)
         
+        
+        print("actor grads norm: {}".format(np.linalg.norm(actor_grads)))
+        print("critic grads norm: {}".format(np.linalg.norm(critic_grads)))
         # Perform a synced update.
         self.actor_optimizer.update(actor_grads, stepsize=self.actor_lr)
         self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
@@ -515,6 +518,7 @@ class DDPG(object):
                     aux_ops.update({'predict':self.pred_loss})
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
             auxgrads = auxoutputs['grads']
+            print("aux grads norm: {}".format(np.linalg.norm(auxgrads)))
             self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)
         
         return critic_loss, actor_loss, auxoutputs

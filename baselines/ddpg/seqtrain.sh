@@ -1,10 +1,10 @@
 #!/bin/bash
 
-logdirpath='/home/tcherici/seqruns_cheetah_200418'
+logdirpath='/home/tcherici/seqruns_standup_070518'
 
-for num in $(seq 0 5)
+for num in $(seq 0 2)
 do
-    for env in 'HalfCheetah-v2'
+    for env in 'HumanoidStandup-v2'
     do
         for aux in '' 'tc' 'prop' 'caus' 'repeat' 'predict'
         do

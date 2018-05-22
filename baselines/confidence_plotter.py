@@ -14,18 +14,18 @@ from baselines.bench.monitor import load_results
     
 X_TIMESTEPS = 'timesteps'
 X_EPISODES = 'episodes'
+X_EPOCHS = 'epochs'
 X_WALLTIME = 'walltime_hrs'
 POSSIBLE_X_AXES = [X_TIMESTEPS, X_EPISODES, X_WALLTIME]
 EPISODES_WINDOW = 100
-COLORS = ['black', 'blue','lime',    'red', 'cyan', 'orange', 'lavender', 'magenta', 'yellow', 'coral','purple', 'pink',
-        'brown', 'teal', 'green', 'lightblue',  'turquoise',
-        'darkgreen', 'tan', 'salmon', 'gold', 'lightpurple', 'darkred', 'darkblue']
+COLORS = ['black', 'blue','red', 'cyan', 'orange','lime', 'teal', 'green', 'darkgreen','brown','purple', 'lavender', 'magenta', 'yellow', 'coral', 'pink',
+         'lightblue',  'turquoise',
+        'tan', 'salmon', 'gold', 'lightpurple', 'darkred', 'darkblue']
 
 def mean_confidence_interval(data, confidence=0.68):
     a = 1.0*np.array(data)
     n = len(a)
     m, se = np.mean(a,axis=0), scipy.stats.sem(a)
-    print(se.shape)
     h = se * scipy.stats.t.ppf((1+confidence)/2., n-1)
     return m, m-h, m+h
 
@@ -37,7 +37,6 @@ def get_data(maindir, keyword):
         if keyword in datadir: 
             print(datadir)
             csvpath = maindir+"/"+datadir+"/progress.csv"
-            print(csvpath)
             with open(csvpath) as f:
                 reader = csv.reader(f)
                 labels = next(reader)
@@ -62,28 +61,31 @@ def get_data(maindir, keyword):
                         rewards = np.array(rewards[1:]).astype(float)
                         rewards_list.append(np.array(rewards))
     
+    rewards_length = [len(item) for item in rewards_list]
+    samelength = rewards_length[1:] == rewards_length[:-1]
+    if not samelength:
+        ValueError("Not all reward lists are equal")
     return steps, rewards_list
 
 
-def lineplotCIgroups(maindir, keywords, x_label='steps (thousands)', y_label='reward distribution', title='no title'):
+def lineplotCIgroups(maindir, keywords, x_label='steps (thousands)', y_label='cumulative reward', title='no title'):
     # Create the plot object
     _, ax = plt.subplots()
     
     for ind,keyword in enumerate(keywords): 
-        print('keyword:'+keyword)
+        print('keyword: '+keyword)
         indexes, data = get_data(maindir, keyword)
         med,low,high = mean_confidence_interval(data)
         
-        indexes = np.array(indexes).astype(float)/1000
+        indexes = np.array(indexes).astype(float)/2000
     
         # Plot the data, set the linewidth, color and transparency of the
         # line, provide a label for the legend
         line, = ax.plot(indexes, med, lw = 1, color = COLORS[ind], alpha = 1)
         label = 'no aux' if keyword=='__' else keyword
         line.set_label(label)
-        print(ind)
         # Shade the confidence interval
-        ax.fill_between(indexes, low, high, color = COLORS[ind], alpha = 0.4)
+        ax.fill_between(indexes, low, high, color = COLORS[ind], alpha = 0.3)
         
     # Display legend
     ax.legend(loc = 'best')
@@ -97,13 +99,13 @@ def main():
     import argparse
     import os
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--maindir', help='parent folder for runs', default='/home/tcherici/seqrunsnorm5_020418')
+    parser.add_argument('-d','--maindir', help='parent folder for runs', default='/home/tcherici/seqrunsnorm5_020418')
     parser.add_argument('-k','--keywords', action='append', help='list of keywords for runs selection (e.g. caus)')
-    parser.add_argument('--xaxis', help = 'Varible on X-axis', default = X_TIMESTEPS)
-    parser.add_argument('--plot_title', help = 'Title of plot', default = 'no title')
+    parser.add_argument('-x','--xaxis', help = 'Varible on X-axis', default = X_EPOCHS)
+    parser.add_argument('-t','--title', help = 'Title of plot', default = None)
     args = parser.parse_args()
     
-    lineplotCIgroups(args.maindir, args.keywords, x_label=args.xaxis, title=args.plot_title)
+    lineplotCIgroups(args.maindir, args.keywords, x_label=args.xaxis, title=args.title)
     
     plt.show()
 
