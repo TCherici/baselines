@@ -74,10 +74,8 @@ def similarity(tensor, alpha=10.):
     # alpha value determines how quickly the value falls for inputs higher than 0
     return tf.exp(- alpha * tensor)
     
-def normalize_loss(loss):
-    normloss = loss/(tf.stop_gradient(tf.abs(loss))+1e-9)
-    return normloss
-
+def get_loss_normval(loss):
+    return tf.stop_gradient(tf.abs(loss))+1e-12
 
 class DDPG(object):
     def __init__(self, actor, critic, memory, observation_shape, action_shape, param_noise=None, action_noise=None,
@@ -233,7 +231,19 @@ class DDPG(object):
                 tc_loss_a = similarity(magnitude(s1-s0)) * magnitude(self.actions)
                 tc_loss_b = similarity(magnitude(self.actions)) * magnitude(s1-s0)
                 self.tc_loss = tf.reduce_mean(tc_loss_a + tc_loss_b)
-                self.aux_losses += normalize_loss(self.tc_loss)
+                
+                # tensor operation of normval
+                self.tc_normval_tf = get_loss_normval(self.tc_loss)
+                # tensor placeholder of normval
+                if not hasattr(self,'tc_normval_var'):
+                    self.tc_normval_var = {}
+                self.tc_normval_var[owner.name] = tf.placeholder("float", name="tc_normval_"+owner.name)
+                # constant to be changed by getnormval()
+                self.tc_normval_c = 0.
+                
+                self.tc_loss = self.tc_loss/self.tc_normval_var[owner.name]
+                
+                self.aux_losses += self.tc_loss
             
             if 'prop' in self.aux_tasks:
                 # proportionality loss: 
@@ -315,7 +325,17 @@ class DDPG(object):
         actor_nb_params = sum([reduce(lambda x, y: x * y, shape) for shape in actor_shapes])
         logger.info('  actor shapes: {}'.format(actor_shapes))
         logger.info('  actor params: {}'.format(actor_nb_params))
-        self.actor_grads = U.flatgrad(normalize_loss(self.actor_loss), self.actor.trainable_vars, clip_norm=self.clip_norm)
+        
+        # tensor operation of normval
+        self.actor_normval_tf = get_loss_normval(self.actor_loss)
+        # tensor placeholder of normval
+        self.actor_normval_var = tf.placeholder("float", name="actor_normval")
+        # constant to be changed by getnormval()
+        self.actor_normval_c = 0.
+        
+        self.actor_loss = self.actor_loss/self.actor_normval_var
+        
+        self.actor_grads = U.flatgrad(self.actor_loss, self.actor.trainable_vars, clip_norm=self.clip_norm)
         self.actor_optimizer = MpiAdam(var_list=self.actor.trainable_vars,
             beta1=0.9, beta2=0.999, epsilon=1e-08)
 
@@ -338,7 +358,16 @@ class DDPG(object):
         critic_nb_params = sum([reduce(lambda x, y: x * y, shape) for shape in critic_shapes])
         logger.info('  critic shapes: {}'.format(critic_shapes))
         logger.info('  critic params: {}'.format(critic_nb_params))
-        self.critic_grads = U.flatgrad(normalize_loss(self.critic_loss), self.critic.trainable_vars, clip_norm=self.clip_norm)
+        
+        # tensor operation of normval
+        self.critic_normval_tf = get_loss_normval(self.critic_loss)
+        # tensor placeholder of normval
+        self.critic_normval_var = tf.placeholder("float", name="critic_normval")
+        # constant to be changed by getnormval()
+        self.critic_normval_c = 0.
+        
+        self.critic_loss = self.critic_loss/self.critic_normval_var
+        self.critic_grads = U.flatgrad(self.critic_loss, self.critic.trainable_vars, clip_norm=self.clip_norm)
         self.critic_optimizer = MpiAdam(var_list=self.critic.trainable_vars,
             beta1=0.9, beta2=0.999, epsilon=1e-08)
 
@@ -421,6 +450,46 @@ class DDPG(object):
         if self.normalize_observations:
             self.obs_rms.update(np.array([obs0]))
 
+    def setnormvals(self):
+        print(" ---- SETTING LOSS NORMALIZATION VALUES ---- ")
+        batch = self.memory.sampletwice(batch_size=self.batch_size*5)
+        # Get normvals DDPG
+        target_Q = self.sess.run(self.target_Q, feed_dict={
+                self.obs1: batch['obs1'],
+                self.rewards: batch['rewards'],
+                self.terminals1: batch['terminals1'].astype('float32'),
+                self.actor_normval_var: 1.,
+                self.critic_normval_var: 1.
+            })
+        #ops = [self.actor_grads, self.actor_loss, self.critic_grads, self.critic_loss]
+        feed_dict = { self.obs0: batch['obs0'], 
+                      self.actions: batch['actions'], 
+                      self.critic_target: target_Q,
+                      self.actor_normval_var: 1.,
+                    self.critic_normval_var: 1.
+                 }
+        self.actor_normval_c, self.critic_normval_c = self.sess.run([self.actor_normval_tf, self.critic_normval_tf], feed_dict=feed_dict)
+        print("actor_normval: {}".format(self.actor_normval_c))
+        print("critic_normval: {}".format(self.critic_normval_c))
+    
+        # Get normvals AUX
+        if self.aux_tasks:
+            aux_dict = {}
+            aux_ops = {}
+            for index, auxtask in enumerate(self.aux_tasks):
+                if auxtask == 'tc':
+                    tc_dict = {
+                        self.obs0: batch['obs0'],
+                        self.obs1: batch['obs1'],
+                        self.actions: batch['actions'],
+                        self.tc_normval_var['actor']: 1.,
+                        self.tc_normval_var['critic']: 1.}
+                self.tc_normval_c = self.sess.run(self.tc_normval_tf, feed_dict=tc_dict)
+                print("tc_normval: {}".format(self.tc_normval_c))
+
+        
+        print(" --------------------------------------------- ")
+
     def train(self):
         # Get a batch.
         if self.aux_tasks is not None:
@@ -455,18 +524,22 @@ class DDPG(object):
                 self.obs1: batch['obs1'],
                 self.rewards: batch['rewards'],
                 self.terminals1: batch['terminals1'].astype('float32'),
+                self.actor_normval_var: self.actor_normval_c,
+                self.critic_normval_var: self.critic_normval_c
             })
 
         # Get gradients DDPG
         ops = [self.actor_grads, self.actor_loss, self.critic_grads, self.critic_loss]
         feed_dict = { self.obs0: batch['obs0'], 
                       self.actions: batch['actions'], 
-                      self.critic_target: target_Q}
+                      self.critic_target: target_Q,
+                      self.actor_normval_var: self.actor_normval_c,
+                      self.critic_normval_var: self.critic_normval_c}
         actor_grads, actor_loss, critic_grads, critic_loss = self.sess.run(ops, feed_dict=feed_dict)
         
         
-        print("actor grads norm: {}".format(np.linalg.norm(actor_grads)))
-        print("critic grads norm: {}".format(np.linalg.norm(critic_grads)))
+        #print("actor grads norm: {}".format(np.linalg.norm(actor_grads)))
+        #print("critic grads norm: {}".format(np.linalg.norm(critic_grads)))
         # Perform a synced update.
         self.actor_optimizer.update(actor_grads, stepsize=self.actor_lr)
         self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
@@ -481,7 +554,9 @@ class DDPG(object):
                     aux_dict.update({
                         self.obs0: batch['obs0'],
                         self.obs1: batch['obs1'],
-                        self.actions: batch['actions']})
+                        self.actions: batch['actions'],
+                        self.tc_normval_var['actor']: self.tc_normval_c,
+                        self.tc_normval_var['critic']: self.tc_normval_c})
                     aux_ops.update({'tc':self.tc_loss})
                 if auxtask == 'prop':
                     aux_dict.update({
@@ -518,7 +593,8 @@ class DDPG(object):
                     aux_ops.update({'predict':self.pred_loss})
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
             auxgrads = auxoutputs['grads']
-            print("aux grads norm: {}".format(np.linalg.norm(auxgrads)))
+            
+            #print("aux grads norm: {}".format(np.linalg.norm(auxgrads)))
             self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)
         
         return critic_loss, actor_loss, auxoutputs
