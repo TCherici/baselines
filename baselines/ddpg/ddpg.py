@@ -315,14 +315,18 @@ class DDPG(object):
         actor_nb_params = sum([reduce(lambda x, y: x * y, shape) for shape in actor_shapes])
         logger.info('  actor shapes: {}'.format(actor_shapes))
         logger.info('  actor params: {}'.format(actor_nb_params))
-        self.actor_grads = U.flatgrad(normalize_loss(self.actor_loss), self.actor.trainable_vars, clip_norm=self.clip_norm)
+        self.actor_grads = U.flatgrad(self.actor_loss, self.actor.trainable_vars, clip_norm=self.clip_norm)        
+        #self.actor_grads = U.flatgrad(normalize_loss(self.actor_loss), self.actor.trainable_vars, clip_norm=self.clip_norm)
         self.actor_optimizer = MpiAdam(var_list=self.actor.trainable_vars,
             beta1=0.9, beta2=0.999, epsilon=1e-08)
 
     def setup_critic_optimizer(self):
         logger.info('setting up critic optimizer')
         normalized_critic_target_tf = tf.clip_by_value(normalize(self.critic_target, self.ret_rms), self.return_range[0], self.return_range[1])
-        self.critic_loss = tf.reduce_mean(tf.square(self.normalized_critic_tf - normalized_critic_target_tf))        
+#        self.critic_loss = tf.reduce_mean(tf.square(self.normalized_critic_tf - normalized_critic_target_tf))    
+        diff = self.normalized_critic_tf - normalized_critic_target_tf
+        self.critic_loss = tf.reduce_mean(tf.square(diff))/tf.reduce_mean(tf.stop_gradient(tf.abs(diff)+1e-9))    
+            
         if self.critic_l2_reg > 0.:
             critic_reg_vars = [var for var in self.critic.trainable_vars if 'kernel' in var.name and 'output' not in var.name]
             for var in critic_reg_vars:
@@ -338,7 +342,8 @@ class DDPG(object):
         critic_nb_params = sum([reduce(lambda x, y: x * y, shape) for shape in critic_shapes])
         logger.info('  critic shapes: {}'.format(critic_shapes))
         logger.info('  critic params: {}'.format(critic_nb_params))
-        self.critic_grads = U.flatgrad(normalize_loss(self.critic_loss), self.critic.trainable_vars, clip_norm=self.clip_norm)
+        #self.critic_grads = U.flatgrad(normalize_loss(self.critic_loss), self.critic.trainable_vars, clip_norm=self.clip_norm)
+        self.critic_grads = U.flatgrad(self.critic_loss, self.critic.trainable_vars, clip_norm=self.clip_norm)
         self.critic_optimizer = MpiAdam(var_list=self.critic.trainable_vars,
             beta1=0.9, beta2=0.999, epsilon=1e-08)
 
@@ -463,7 +468,9 @@ class DDPG(object):
                       self.actions: batch['actions'], 
                       self.critic_target: target_Q}
         actor_grads, actor_loss, critic_grads, critic_loss = self.sess.run(ops, feed_dict=feed_dict)
-        
+
+        print("actor grads:{}".format(np.linalg.norm(actor_grads)))
+        print("critic grads:{}".format(np.linalg.norm(critic_grads)))        
         # Perform a synced update.
         self.actor_optimizer.update(actor_grads, stepsize=self.actor_lr)
         self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
@@ -515,6 +522,7 @@ class DDPG(object):
                     aux_ops.update({'predict':self.pred_loss})
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
             auxgrads = auxoutputs['grads']
+            print("aux grads:{}".format(np.sum(np.abs(auxgrads))))
             self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)
         
         return critic_loss, actor_loss, auxoutputs

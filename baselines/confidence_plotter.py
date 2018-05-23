@@ -17,7 +17,7 @@ X_EPISODES = 'episodes'
 X_WALLTIME = 'walltime_hrs'
 POSSIBLE_X_AXES = [X_TIMESTEPS, X_EPISODES, X_WALLTIME]
 EPISODES_WINDOW = 100
-COLORS = ['black', 'blue','lime',    'red', 'cyan', 'orange', 'lavender', 'magenta', 'yellow', 'coral','purple', 'pink',
+COLORS = ['black', 'blue', 'red', 'lime', 'cyan', 'orange', 'lavender', 'magenta', 'yellow', 'coral','purple', 'pink',
         'brown', 'teal', 'green', 'lightblue',  'turquoise',
         'darkgreen', 'tan', 'salmon', 'gold', 'lightpurple', 'darkred', 'darkblue']
 
@@ -40,7 +40,11 @@ def get_data(maindir, keyword):
             print(csvpath)
             with open(csvpath) as f:
                 reader = csv.reader(f)
-                labels = next(reader)
+                try:
+                    labels = next(reader)
+                except:
+                    print('!!empty .csv file!!')
+                    continue
                 steps = []
                 rewards = []
                 for ind in range(len(labels)):
