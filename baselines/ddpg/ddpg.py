@@ -75,7 +75,9 @@ def similarity(tensor, alpha=10.):
     return tf.exp(- alpha * tensor)
     
 def normalize_loss(loss):
-    normloss = loss/(tf.stop_gradient(tf.abs(loss))+1e-9)
+    #normloss = loss/(tf.stop_gradient(tf.abs(loss))+1e-9)
+    print("!!! NO NORMALIZATION !!!")
+    normloss = loss
     return normloss
 
 
@@ -243,7 +245,7 @@ class DDPG(object):
                 dsmag100 = magnitude(s101-s100)
                 dsmagdiff = tf.square(dsmag100-dsmag0)
                 actmagsim = similarity(magnitude(self.actions100-self.actions))
-                self.prop_loss = tf.reduce_mean(dsmagdiff * actmagsim)
+                self.prop_loss = tf.reduce_mean(dsmagdiff * actmagsim) * self.aux_lambdas['prop']
                 self.aux_losses += normalize_loss(self.prop_loss)
             
             if 'caus' in self.aux_tasks:
@@ -277,7 +279,7 @@ class DDPG(object):
                 self.aux_losses += normalize_loss(self.pred_loss)
                 self.aux_vars.update(set(predictor.trainable_vars))
                 
-        self.aux_losses = self.aux_losses / (2 * len(self.aux_tasks))
+        #self.aux_losses = self.aux_losses / (2 * len(self.aux_tasks))
         self.aux_vars = list(self.aux_vars)
         self.aux_grads = U.flatgrad(self.aux_losses, self.aux_vars, clip_norm=self.clip_norm)
         self.aux_optimizer = MpiAdam(var_list=self.aux_vars,
@@ -465,8 +467,8 @@ class DDPG(object):
         actor_grads, actor_loss, critic_grads, critic_loss = self.sess.run(ops, feed_dict=feed_dict)
         
         
-        print("actor grads norm: {}".format(np.linalg.norm(actor_grads)))
-        print("critic grads norm: {}".format(np.linalg.norm(critic_grads)))
+        #print("actor grads norm: {}".format(np.linalg.norm(actor_grads)))
+        #print("critic grads norm: {}".format(np.linalg.norm(critic_grads)))
         # Perform a synced update.
         self.actor_optimizer.update(actor_grads, stepsize=self.actor_lr)
         self.critic_optimizer.update(critic_grads, stepsize=self.critic_lr)
@@ -518,7 +520,7 @@ class DDPG(object):
                     aux_ops.update({'predict':self.pred_loss})
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
             auxgrads = auxoutputs['grads']
-            print("aux grads norm: {}".format(np.linalg.norm(auxgrads)))
+            #print("aux grads norm: {}".format(np.linalg.norm(auxgrads)))
             self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)
         
         return critic_loss, actor_loss, auxoutputs
