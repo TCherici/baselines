@@ -114,6 +114,8 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 # for the first 5 cycles just gather data
                 if epoch == 0 and cycle < 5:
                     continue
+                elif epoch == 0 and cycle < 6:
+                    agent.setnormvals()
                 
                 train_startt = time.time()
                 ep_rollout_times.append(train_startt-rollout_startt)
