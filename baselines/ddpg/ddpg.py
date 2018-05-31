@@ -613,8 +613,8 @@ class DDPG(object):
                 self.obs1: batch['obs1'],
                 self.rewards: batch['rewards'],
                 self.terminals1: batch['terminals1'].astype('float32'),
-                self.actor_normval_var: self.actor_normval_c,
-                self.critic_normval_var: self.critic_normval_c
+                self.actor_normval_var: 1.,
+                self.critic_normval_var: 1.
             })
 
         # Get gradients DDPG
@@ -622,8 +622,8 @@ class DDPG(object):
         feed_dict = { self.obs0: batch['obs0'], 
                       self.actions: batch['actions'], 
                       self.critic_target: target_Q,
-                      self.actor_normval_var: self.actor_normval_c,
-                      self.critic_normval_var: self.critic_normval_c}
+                      self.actor_normval_var: 1.,
+                      self.critic_normval_var: 1.}
         actor_grads, actor_loss, critic_grads, critic_loss = self.sess.run(ops, feed_dict=feed_dict)
         
         

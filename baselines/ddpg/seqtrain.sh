@@ -1,6 +1,6 @@
 #!/bin/bash
 
-logdirpath='/home/tcherici/seqruns_standup_070518'
+logdirpath='/home/tcherici/init_norm_noac_standup_280518/'
 
 for num in $(seq 0 2)
 do
