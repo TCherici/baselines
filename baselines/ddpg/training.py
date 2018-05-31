@@ -124,6 +124,9 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 epoch_actor_losses = []
                 epoch_critic_losses = []
                 epoch_aux_losses = {}
+                epoch_aux_losses['grads/actor_grads'] = []
+                epoch_aux_losses['grads/critic_grads'] = []
+                epoch_aux_losses['grads/aux_grads'] = []
                 for name in aux_tasks:
                     epoch_aux_losses['aux/'+name] = []
                 epoch_adaptive_distances = []
@@ -139,12 +142,10 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                     
                     epoch_critic_losses.append(cl)
                     epoch_actor_losses.append(al)
-                    if aux_tasks:
-                        for name, value in auxl.items():
-                            if name == 'grads':
-                                #print('mean grads:{}'.format(np.mean(np.abs(value))))
-                                continue
-                            #print(name, value)
+                    for name, value in auxl.items():
+                        if 'grads' in name:
+                            epoch_aux_losses['grads/'+name].append(np.abs(value))
+                        else:
                             epoch_aux_losses['aux/'+name].append(value)
 
                     agent.update_target_net()
@@ -195,6 +196,7 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
             if aux_tasks is not None:
                 for name, values in epoch_aux_losses.items():
                     combined_stats[name] = np.mean(values)
+            
 
             # Evaluation statistics.
             if eval_env is not None:

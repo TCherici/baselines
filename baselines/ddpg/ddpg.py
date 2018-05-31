@@ -239,7 +239,7 @@ class DDPG(object):
                     self.tc_normval_var = {}
                 self.tc_normval_var[owner.name] = tf.placeholder("float", name="tc_normval_"+owner.name)
                 # constant to be changed by getnormval()
-                self.tc_normval_c = 0.
+                self.tc_normval_c = 1.
                 
                 self.tc_loss = self.tc_loss/self.tc_normval_var[owner.name]
                 
@@ -262,7 +262,7 @@ class DDPG(object):
                     self.prop_normval_var = {}
                 self.prop_normval_var[owner.name] = tf.placeholder("float", name="prop_normval_"+owner.name)
                 # constant to be changed by getnormval()
-                self.prop_normval_c = 0.
+                self.prop_normval_c = 1.
                 
                 self.prop_loss = self.prop_loss/self.prop_normval_var[owner.name]
                 
@@ -284,7 +284,7 @@ class DDPG(object):
                     self.caus_normval_var = {}
                 self.caus_normval_var[owner.name] = tf.placeholder("float", name="caus_normval_"+owner.name)
                 # constant to be changed by getnormval()
-                self.caus_normval_c = 0.
+                self.caus_normval_c = 1.
                 
                 self.caus_loss = self.caus_loss/self.caus_normval_var[owner.name]
                 
@@ -308,7 +308,7 @@ class DDPG(object):
                     self.repeat_normval_var = {}
                 self.repeat_normval_var[owner.name] = tf.placeholder("float", name="repeat_normval_"+owner.name)
                 # constant to be changed by getnormval()
-                self.repeat_normval_c = 0.
+                self.repeat_normval_c = 1.
                 
                 self.repeat_loss = self.repeat_loss/self.repeat_normval_var[owner.name]
                 
@@ -328,7 +328,7 @@ class DDPG(object):
                     self.pred_normval_var = {}
                 self.pred_normval_var[owner.name] = tf.placeholder("float", name="pred_normval_"+owner.name)
                 # constant to be changed by getnormval()
-                self.pred_normval_c = 0.
+                self.pred_normval_c = 1.
                 
                 self.pred_loss = self.pred_loss/self.pred_normval_var[owner.name]
                 self.aux_losses += self.pred_loss
@@ -637,7 +637,7 @@ class DDPG(object):
         # Get gradients AUX
         if self.aux_tasks:
             aux_dict = {}
-            aux_ops = {'grads':self.aux_grads}
+            aux_ops = {'aux_grads':self.aux_grads}
             for index, auxtask in enumerate(self.aux_tasks):
                 if auxtask == 'tc':
                     aux_dict.update({
@@ -689,7 +689,11 @@ class DDPG(object):
                         self.pred_normval_var['critic']: self.pred_normval_c})
                     aux_ops.update({'predict':self.pred_loss})
             auxoutputs = self.sess.run(aux_ops, feed_dict=aux_dict)
-            auxgrads = auxoutputs['grads']
+            auxgrads = auxoutputs['aux_grads']
+            
+            # add act and crit grads to auxoutputs
+            auxoutputs['actor_grads'] = actor_grads
+            auxoutputs['critic_grads'] = critic_grads
             
             #print("aux grads norm: {}".format(np.linalg.norm(auxgrads)))
             self.aux_optimizer.update(auxgrads, stepsize=self.actor_lr)
