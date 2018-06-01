@@ -112,6 +112,7 @@ def parse_args():
     parser.add_argument('--prop-lambda', type=float, default=1.)
     parser.add_argument('--caus-lambda', type=float, default=1.)
     parser.add_argument('--repeat-lambda', type=float, default=1.)
+    parser.add_argument('--predict-lambda', type=float, default=1.)
     
     boolean_flag(parser, 'evaluation', default=False)
     args = parser.parse_args()

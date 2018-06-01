@@ -15,14 +15,14 @@ from mpi4py import MPI
 def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, param_noise, actor, critic,
     normalize_returns, normalize_observations, critic_l2_reg, actor_lr, critic_lr, action_noise,
     popart, gamma, clip_norm, nb_train_steps, nb_rollout_steps, nb_eval_steps, batch_size, memory, 
-    aux_apply, aux_tasks, tc_lambda, prop_lambda, caus_lambda, repeat_lambda, tau=0.01, eval_env=None, param_noise_adaption_interval=50):
+    aux_apply, aux_tasks, tc_lambda, prop_lambda, caus_lambda, repeat_lambda, predict_lambda, tau=0.01, eval_env=None, param_noise_adaption_interval=50):
     rank = MPI.COMM_WORLD.Get_rank()
 
     assert (np.abs(env.action_space.low) == env.action_space.high).all()  # we assume symmetric actions.
     max_action = env.action_space.high
     logger.info('scaling actions by {} before executing in env'.format(max_action))
     # Setup aux tasks' lambdas
-    aux_lambdas = {'tc':tc_lambda,'prop':prop_lambda,'caus':caus_lambda,'repeat':repeat_lambda}
+    aux_lambdas = {'tc':tc_lambda,'prop':prop_lambda,'caus':caus_lambda,'repeat':repeat_lambda, 'predict':predict_lambda}
     
     # Create agent
     agent = DDPG(actor, critic, memory, env.observation_space.shape, env.action_space.shape,
@@ -114,8 +114,6 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 # for the first 5 cycles just gather data
                 if epoch == 0 and cycle < 5:
                     continue
-                elif epoch == 0 and cycle < 6:
-                    agent.setnormvals()
                 
                 train_startt = time.time()
                 ep_rollout_times.append(train_startt-rollout_startt)
@@ -124,6 +122,9 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                 epoch_actor_losses = []
                 epoch_critic_losses = []
                 epoch_aux_losses = {}
+                epoch_aux_losses['grads/actor_grads'] = []
+                epoch_aux_losses['grads/critic_grads'] = []
+                epoch_aux_losses['grads/aux_grads'] = []
                 for name in aux_tasks:
                     epoch_aux_losses['aux/'+name] = []
                 epoch_adaptive_distances = []
@@ -139,13 +140,11 @@ def train(env, nb_epochs, nb_epoch_cycles, render_eval, reward_scale, render, pa
                     
                     epoch_critic_losses.append(cl)
                     epoch_actor_losses.append(al)
-                    if aux_tasks:
-                        for name, value in auxl.items():
-                            if name == 'grads':
-                                #print('mean grads:{}'.format(np.mean(np.abs(value))))
-                                continue
-                            #print(name, value)
-                            epoch_aux_losses['aux/'+name].append(value)
+                    for name, value in auxl.items():
+                        if 'grads' in name:
+                            epoch_aux_losses['grads/'+name].append(np.abs(value))
+                        else:
+                            epoch_aux_losses['aux/'+name].append(np.abs(value))
 
                     agent.update_target_net()
                 
