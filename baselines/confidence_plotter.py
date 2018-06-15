@@ -29,7 +29,7 @@ def mean_confidence_interval(data, confidence=0.68):
     h = se * scipy.stats.t.ppf((1+confidence)/2., n-1)
     return m, m-h, m+h
 
-def get_data(maindir, keyword):
+def get_data(maindir, keyword, data_name):
     # read maindir and get a list of all runs with keyword
     fulldirlist = os.listdir(maindir) 
     rewards_list = []
@@ -52,13 +52,22 @@ def get_data(maindir, keyword):
                         steps = steps[1:]
                             
                             
-                    if labels[ind] == 'rollout/return_history':
+                    if labels[ind] == data_name:
                         rewardind = ind
                         print("ind:{} -- label:{}".format(ind, labels[ind]))
                         f.seek(0)
                         for row in reader:
                             rewards.append(row[rewardind])
-                        rewards = np.array(rewards[1:]).astype(float)
+                        
+                        rewards = rewards[1:]
+                        for n,i in enumerate(rewards):
+                            if i=='':
+                                rewards[n] = float(0)
+                            else:
+                                rewards[n] = float(rewards[n])
+                        
+                        #rewards = list(map(float,rewards[1:]))
+                        print(len(rewards))
                         rewards_list.append(np.array(rewards))
     
     rewards_length = [len(item) for item in rewards_list]
@@ -68,13 +77,13 @@ def get_data(maindir, keyword):
     return steps, rewards_list
 
 
-def lineplotCIgroups(maindir, keywords, x_label='steps (thousands)', y_label='cumulative reward', title='no title'):
+def lineplotCIgroups(maindir, keywords, data_name='rollout/return_history', x_label='steps (thousands)', y_label='cumulative reward', title='no title'):
     # Create the plot object
     _, ax = plt.subplots()
     
     for ind,keyword in enumerate(keywords): 
         print('keyword: '+keyword)
-        indexes, data = get_data(maindir, keyword)
+        indexes, data = get_data(maindir, keyword, data_name)
         med,low,high = mean_confidence_interval(data)
         
         indexes = np.array(indexes).astype(float)/2000
@@ -101,11 +110,13 @@ def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-d','--maindir', help='parent folder for runs', default='/home/tcherici/seqrunsnorm5_020418')
     parser.add_argument('-k','--keywords', action='append', help='list of keywords for runs selection (e.g. caus)')
-    parser.add_argument('-x','--xaxis', help = 'Varible on X-axis', default = X_EPOCHS)
+    parser.add_argument('-n','--data-name', help = 'Name of data in log', default ='rollout/return_history')
+    parser.add_argument('-x','--xaxis', help = 'Variable on X-axis', default = X_EPOCHS)
+    parser.add_argument('-y','--yaxis', help = 'Variable on Y-axis', default = 'cumulative reward')
     parser.add_argument('-t','--title', help = 'Title of plot', default = None)
     args = parser.parse_args()
     
-    lineplotCIgroups(args.maindir, args.keywords, x_label=args.xaxis, title=args.title)
+    lineplotCIgroups(args.maindir, args.keywords, args.data_name, x_label=args.xaxis, y_label=args.yaxis, title=args.title)
     
     plt.show()
 
