@@ -18,7 +18,7 @@ X_EPOCHS = 'epochs'
 X_WALLTIME = 'walltime_hrs'
 POSSIBLE_X_AXES = [X_TIMESTEPS, X_EPISODES, X_WALLTIME]
 EPISODES_WINDOW = 100
-COLORS = ['black', 'blue','red', 'cyan', 'orange','lime', 'teal', 'green', 'darkgreen','brown','purple', 'lavender', 'magenta', 'yellow', 'coral', 'pink',
+COLORS = ['black', 'blue','red','lime', 'cyan', 'orange', 'teal', 'green', 'darkgreen','brown','purple', 'lavender', 'magenta', 'yellow', 'coral', 'pink',
          'lightblue',  'turquoise',
         'tan', 'salmon', 'gold', 'lightpurple', 'darkred', 'darkblue']
 
